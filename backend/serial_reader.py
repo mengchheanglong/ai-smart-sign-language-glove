@@ -17,6 +17,7 @@ import math
 import random
 import argparse
 from pathlib import Path
+import threading
 from typing import Optional, Dict, Any, Generator, Tuple
 
 if sys.platform == "win32":
@@ -190,25 +191,31 @@ class SerialReader:
                 self.is_connected = False
                 return False
 
-        try:
-            import serial
+        import serial
 
-            self.ser = serial.Serial(
-                port=self.port,
-                baudrate=self.baud_rate,
-                timeout=self.timeout,
-            )
-            # Flush existing buffer garbage on boot
-            time.sleep(0.1)
-            self.ser.reset_input_buffer()
-            self.is_connected = True
-            self.start_time = time.time()
-            return True
-        except Exception as e:
-            self.is_connected = False
-            self.ser = None
-            print(f"❌ Failed to connect to {self.port}: {e}")
-            return False
+        for attempt in range(3):
+            try:
+                self.ser = serial.Serial(
+                    port=self.port,
+                    baudrate=self.baud_rate,
+                    timeout=self.timeout,
+                )
+                # Flush existing buffer garbage on boot
+                time.sleep(0.1)
+                self.ser.reset_input_buffer()
+                self.is_connected = True
+                self.start_time = time.time()
+                return True
+            except Exception as e:
+                # If another process or driver just released the handle, wait and retry
+                if attempt < 2 and ("PermissionError" in str(e) or "Access is denied" in str(e)):
+                    time.sleep(0.2)
+                    continue
+                self.is_connected = False
+                self.ser = None
+                print(f"❌ Failed to connect to {self.port}: {e}")
+                return False
+        return False
 
     def disconnect(self):
         """Disconnect and release resources."""
@@ -219,6 +226,8 @@ class SerialReader:
             except Exception:
                 pass
             self.ser = None
+            # Allow Windows kernel driver brief moment to release COM handle
+            time.sleep(0.12)
         if self._csv_file:
             try:
                 self._csv_file.flush()
@@ -318,6 +327,52 @@ class SerialReader:
                 count += 1
                 if max_packets and count >= max_packets:
                     break
+
+
+# Global shared singleton connection for multi-threaded / multi-session runtimes (e.g. Streamlit)
+_SHARED_READER: Optional[SerialReader] = None
+_SHARED_LOCK = threading.Lock()
+
+
+def get_shared_reader(port: str, baud_rate: int = DEFAULT_BAUD_RATE, timeout: float = 0.5) -> Optional[SerialReader]:
+    """
+    Get or create a process-wide shared SerialReader singleton.
+    Prevents Win32 exclusive handle collision (PermissionError 13)
+    when Streamlit reruns or multiple browser tabs are open.
+    """
+    global _SHARED_READER
+    with _SHARED_LOCK:
+        if (
+            _SHARED_READER is not None
+            and _SHARED_READER.is_connected
+            and _SHARED_READER.port == port
+        ):
+            return _SHARED_READER
+
+        if _SHARED_READER is not None:
+            try:
+                _SHARED_READER.disconnect()
+            except Exception:
+                pass
+            _SHARED_READER = None
+
+        reader = SerialReader(port=port, baud_rate=baud_rate, timeout=timeout)
+        if reader.connect():
+            _SHARED_READER = reader
+            return _SHARED_READER
+        return None
+
+
+def close_shared_reader():
+    """Disconnect and release the process-wide shared SerialReader singleton."""
+    global _SHARED_READER
+    with _SHARED_LOCK:
+        if _SHARED_READER is not None:
+            try:
+                _SHARED_READER.disconnect()
+            except Exception:
+                pass
+            _SHARED_READER = None
 
 
 def main():
