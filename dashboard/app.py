@@ -1,16 +1,15 @@
 """
-app.py — Interactive Real-Time Dashboard for AI Smart Sign Language Glove
+app.py — Modern UI/UX Interactive Telemetry & AI Dashboard
+AI Smart Sign Language Glove — Team 2 Senior Design Project
 
 Features:
-- Live gesture prediction banner with emoji and confidence
-- 5-Finger flex sensor visual progress bars and voltage meters
-- 6-DOF IMU orientation & angular velocity visualization
-- Real-time ESP32 USB Serial streaming with auto-port detection
-- Full interactive Simulation Mode with gesture presets and manual finger sliders
-- Stream diagnostic metrics (Hz, packet counts, latency)
-- Dataset recording launcher from web UI
-
-Team 2 — Senior Design Project
+- High-contrast, glassmorphism visual styling suitable for university presentations
+- Live Hero Gesture recognition card with confidence gauge and translation meaning
+- Live Sentence / Gesture History timeline (translating continuous gestures into words)
+- 5-Finger interactive flex telemetry cards with color-coded bend indicators
+- 6-DOF IMU motion & hand posture attitude telemetry (pitch, roll, total acceleration)
+- Bidirectional hardware controls: 💡 Blink LED, 🔊 Beep Buzzer, 🔄 Refresh Ports
+- Dual input mode: Real ESP32 USB Serial (COM7 auto-detect) vs Interactive Simulation
 """
 
 import sys
@@ -19,7 +18,7 @@ import time
 import math
 import random
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 # Ensure project root is in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -39,57 +38,192 @@ from backend.utils import (
     GESTURE_INFO,
     FLEX_SENSOR_NAMES,
     DATASET_DIR,
-    packet_to_csv_row,
-    DATASET_COLUMNS,
 )
 from backend.predictor import GesturePredictor
 from backend.serial_reader import SerialReader
 
 # ============================================================
-# STREAMLIT PAGE CONFIG
+# STREAMLIT PAGE CONFIGURATION
 # ============================================================
 st.set_page_config(
-    page_title="AI Smart Sign Language Glove",
+    page_title="AI Sign Language Glove Telemetry",
     page_icon="🧤",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Custom CSS for crisp, high-contrast dashboard styling
+# ============================================================
+# PREMIUM GLASSMORPHISM & MODERN CSS DESIGN SYSTEM
+# ============================================================
 st.markdown("""
 <style>
-    .main-title {
+    /* Global Typography & Background */
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    
+    html, body, [class*="css"] {
+        font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    /* Main Container Padding */
+    .block-container {
+        padding-top: 1.5rem;
+        padding-bottom: 2rem;
+        max-width: 1400px;
+    }
+
+    /* Top Navigation Header */
+    .header-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(12px);
+        padding: 18px 24px;
+        border-radius: 16px;
+        margin-bottom: 20px;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.25);
+    }
+    .header-title {
+        font-size: 1.7rem;
+        font-weight: 800;
+        background: linear-gradient(90deg, #38BDF8 0%, #818CF8 50%, #C084FC 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin: 0;
+        line-height: 1.2;
+    }
+    .header-subtitle {
+        font-size: 0.85rem;
+        color: #94A3B8;
+        margin-top: 4px;
+        font-weight: 500;
+    }
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 14px;
+        border-radius: 9999px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+    }
+    .badge-live {
+        background: rgba(16, 185, 129, 0.15);
+        border: 1px solid rgba(16, 185, 129, 0.4);
+        color: #34D399;
+    }
+    .badge-sim {
+        background: rgba(168, 85, 247, 0.15);
+        border: 1px solid rgba(168, 85, 247, 0.4);
+        color: #C084FC;
+    }
+    .pulse-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: currentColor;
+        animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+        0% { transform: scale(0.95); opacity: 0.8; }
+        50% { transform: scale(1.3); opacity: 1; }
+        100% { transform: scale(0.95); opacity: 0.8; }
+    }
+
+    /* Hero Gesture Banner */
+    .hero-card {
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.85) 0%, rgba(15, 23, 42, 0.95) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 20px;
+        padding: 24px;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+        position: relative;
+        overflow: hidden;
+    }
+    .gesture-emoji {
+        font-size: 4.2rem;
+        line-height: 1;
+        filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3));
+    }
+    .gesture-name {
         font-size: 2.2rem;
+        font-weight: 800;
+        color: #F8FAFC;
+        letter-spacing: -0.5px;
+        margin: 6px 0 2px 0;
+    }
+    .gesture-meaning {
+        font-size: 1.15rem;
+        font-weight: 600;
+        color: #38BDF8;
+    }
+
+    /* Finger Cards */
+    .finger-box {
+        background: linear-gradient(180deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.8) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 16px 14px;
+        text-align: center;
+        transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    .finger-box:hover {
+        transform: translateY(-2px);
+        border-color: rgba(56, 189, 248, 0.4);
+    }
+    .finger-header {
+        font-size: 0.95rem;
         font-weight: 700;
-        margin-bottom: 0px;
-        color: #1E88E5;
+        color: #F1F5F9;
+        margin-bottom: 8px;
     }
-    .sub-title {
-        font-size: 1.0rem;
-        color: #757575;
-        margin-bottom: 20px;
+    .finger-adc {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: #F8FAFC;
+        margin: 4px 0;
     }
-    .metric-card {
-        background-color: #f8f9fa;
-        border-radius: 10px;
-        padding: 15px;
-        border: 1px solid #e0e0e0;
-        text-align: center;
+    .finger-meta {
+        font-size: 0.8rem;
+        color: #94A3B8;
     }
-    .gesture-banner {
+
+    /* Translation Ticker / Sentence Builder */
+    .ticker-container {
+        background: rgba(15, 23, 42, 0.7);
+        border: 1px solid rgba(56, 189, 248, 0.25);
         border-radius: 12px;
-        padding: 20px;
-        text-align: center;
-        color: white;
-        margin-bottom: 20px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        padding: 12px 18px;
+        margin: 16px 0 24px 0;
+        display: flex;
+        align-items: center;
+        gap: 12px;
     }
-    .finger-card {
-        background: #ffffff;
-        border: 1px solid #e0e0e0;
-        border-radius: 8px;
-        padding: 12px;
-        text-align: center;
+    .ticker-label {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: #38BDF8;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        white-space: nowrap;
+    }
+    .ticker-text {
+        font-size: 1.15rem;
+        font-weight: 600;
+        color: #F8FAFC;
+        flex-grow: 1;
+        letter-spacing: 0.2px;
+    }
+
+    /* Card Panels */
+    .panel-card {
+        background: rgba(30, 41, 59, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 18px;
+        margin-bottom: 16px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -108,11 +242,14 @@ if "predictor" not in st.session_state:
 if "reader" not in st.session_state:
     st.session_state.reader = None
 
-if "is_streaming" not in st.session_state:
-    st.session_state.is_streaming = False
+if "history_tokens" not in st.session_state:
+    st.session_state.history_tokens = ["HELLO"]
 
-if "sim_mode" not in st.session_state:
-    st.session_state.sim_mode = "Preset Loop"
+if "last_stable_gesture" not in st.session_state:
+    st.session_state.last_stable_gesture = None
+
+if "gesture_hold_count" not in st.session_state:
+    st.session_state.gesture_hold_count = 0
 
 if "sim_preset_idx" not in st.session_state:
     st.session_state.sim_preset_idx = 0
@@ -125,10 +262,9 @@ if "sim_last_cycle" not in st.session_state:
 # HELPER FUNCTIONS
 # ============================================================
 def raw_to_bend_pct(raw_adc: int, straight_adc: int = 3200, bent_adc: int = 1100) -> float:
-    """Map raw ADC value to 0-100% bend."""
+    """Map raw ADC reading to 0-100% bend."""
     if straight_adc == bent_adc:
         return 0.0
-    # Higher ADC = straighter, Lower ADC = more bent
     pct = ((straight_adc - raw_adc) / float(straight_adc - bent_adc)) * 100.0
     return max(0.0, min(100.0, pct))
 
@@ -147,19 +283,18 @@ def generate_simulated_packet(preset_name: str, noise: bool = True) -> Dict[str,
         ax, ay, az = profile["accel"]
         gx, gy, gz = profile["gyro"]
     else:
-        # Neutral default
         f = [2400, 2400, 2400, 2400, 2400]
         ax, ay, az = [0.0, 0.0, 9.81]
         gx, gy, gz = [0.0, 0.0, 0.0]
 
     if noise:
         f = [int(val + random.gauss(0, 25)) for val in f]
-        ax += random.gauss(0, 0.08)
-        ay += random.gauss(0, 0.08)
-        az += random.gauss(0, 0.08)
-        gx += random.gauss(0, 0.1)
-        gy += random.gauss(0, 0.1)
-        gz += random.gauss(0, 0.1)
+        ax += random.gauss(0, 0.06)
+        ay += random.gauss(0, 0.06)
+        az += random.gauss(0, 0.06)
+        gx += random.gauss(0, 0.08)
+        gy += random.gauss(0, 0.08)
+        gz += random.gauss(0, 0.08)
 
     f = [max(0, min(4095, val)) for val in f]
     return {
@@ -171,64 +306,97 @@ def generate_simulated_packet(preset_name: str, noise: bool = True) -> Dict[str,
 
 
 # ============================================================
-# SIDEBAR CONTROLS
+# SIDEBAR NAVIGATION & HARDWARE CONTROLS
 # ============================================================
-st.sidebar.title("🎛️ Glove Controls")
+st.sidebar.markdown("### 🎛️ Glove Control Station")
+
+# Auto-detect available serial ports
+available_ports = find_serial_ports(prefer_usb=True)
+has_real_hardware = len(available_ports) > 0 and any("ch34" in p.get("description", "").lower() or "com7" in p.get("port", "").lower() for p in available_ports)
+
+default_source_idx = 1 if has_real_hardware else 0
 
 input_source = st.sidebar.radio(
-    "Data Source",
+    "Data Source Mode",
     ["Interactive Simulation", "ESP32 USB Serial"],
-    index=0,
-    help="Switch between physical ESP32 glove and interactive virtual simulation."
+    index=default_source_idx,
+    help="Toggle between live ESP32 serial communication and simulated virtual telemetry."
 )
 
 if input_source == "ESP32 USB Serial":
-    st.sidebar.subheader("Serial Connection")
-    ports = find_serial_ports()
-    port_options = [p["port"] for p in ports]
+    st.sidebar.markdown("#### 🔌 Serial Port Configuration")
     
-    if port_options:
-        selected_port = st.sidebar.selectbox("Select Port", port_options)
-    else:
-        selected_port = st.sidebar.text_input("Port (manual)", value="COM3")
-        st.sidebar.caption("⚠️ No active USB serial ports auto-detected.")
+    col_port_sel, col_port_ref = st.sidebar.columns([3, 1])
+    with col_port_sel:
+        port_names = [p["port"] for p in available_ports]
+        if port_names:
+            # Default to COM7 if present
+            default_port_idx = port_names.index("COM7") if "COM7" in port_names else 0
+            selected_port = st.selectbox("Select Active Port", port_names, index=default_port_idx)
+        else:
+            selected_port = st.text_input("Port Name (Manual)", value="COM7")
+    
+    with col_port_ref:
+        st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+        if st.button("🔄", help="Scan USB ports"):
+            st.rerun()
 
     baud_rate = st.sidebar.selectbox("Baud Rate", [115200, 9600, 57600], index=0)
 
-    col_btn1, col_btn2 = st.sidebar.columns(2)
-    if col_btn1.button("🔌 Connect", use_container_width=True):
+    # Connect / Disconnect Buttons
+    col_conn, col_disc = st.sidebar.columns(2)
+    if col_conn.button("⚡ Connect", use_container_width=True, type="primary"):
         try:
             reader = SerialReader(port=selected_port, baud_rate=baud_rate)
             if reader.connect():
                 st.session_state.reader = reader
-                st.sidebar.success(f"Connected to {selected_port}")
+                st.sidebar.success(f"Connected to {selected_port}!")
             else:
-                st.sidebar.error("Failed to connect.")
+                st.sidebar.error("Could not open port. Check USB cable.")
         except Exception as e:
             st.sidebar.error(f"Error: {e}")
 
-    if col_btn2.button("Disconnect", use_container_width=True):
+    if col_disc.button("Disconnect", use_container_width=True):
         if st.session_state.reader:
             st.session_state.reader.disconnect()
             st.session_state.reader = None
-            st.sidebar.info("Disconnected.")
+            st.sidebar.info("Disconnected from ESP32.")
 
-else:  # Interactive Simulation
-    st.sidebar.subheader("Simulation Settings")
+    # Hardware Feedback Buttons
+    st.sidebar.markdown("#### 💡 Hardware Actuators")
+    col_led, col_buzz = st.sidebar.columns(2)
+    with col_led:
+        if st.button("💡 Test LED", use_container_width=True, help="Send pulse to GPIO18 LED"):
+            if st.session_state.reader and st.session_state.reader.is_connected:
+                st.session_state.reader.send_command("b\n")
+                st.toast("Sent LED Pulse Command ('b') to ESP32", icon="💡")
+            else:
+                st.toast("Connect ESP32 first to test LED", icon="⚠️")
+    with col_buzz:
+        if st.button("🔊 Test Buzzer", use_container_width=True, help="Send 2400Hz beep to GPIO19"):
+            if st.session_state.reader and st.session_state.reader.is_connected:
+                st.session_state.reader.send_command("z\n")
+                st.toast("Sent Buzzer Tone Command ('z') to ESP32", icon="🔊")
+            else:
+                st.toast("Connect ESP32 first to test Buzzer", icon="⚠️")
+
+else:  # Interactive Simulation Mode
+    st.sidebar.markdown("#### 🧪 Virtual Hand Simulation")
     sim_mode = st.sidebar.selectbox(
-        "Simulation Preset",
-        ["Live Playback Loop", "OPEN_PALM", "CLOSED_FIST", "POINTING", "PEACE", "THUMBS_UP", "RESTING", "Manual Sliders"]
+        "Simulation Routine",
+        ["Live Playback Loop", "OPEN_PALM", "CLOSED_FIST", "POINTING", "PEACE", "THUMBS_UP", "RESTING", "Manual Sliders"],
+        help="Select a predefined gesture pose or test individual finger sliders."
     )
     sim_noise = st.sidebar.checkbox("Add Natural Sensor Jitter / Noise", value=True)
 
     manual_packet = None
     if sim_mode == "Manual Sliders":
-        st.sidebar.markdown("##### 🖐️ Finger Flex Levels")
-        m_thumb = st.sidebar.slider("Thumb Bend (ADC)", 800, 3600, 3200)
-        m_index = st.sidebar.slider("Index Bend (ADC)", 800, 3600, 3200)
-        m_middle = st.sidebar.slider("Middle Bend (ADC)", 800, 3600, 3200)
-        m_ring = st.sidebar.slider("Ring Bend (ADC)", 800, 3600, 3200)
-        m_little = st.sidebar.slider("Little Bend (ADC)", 800, 3600, 3200)
+        st.sidebar.markdown("##### 🖐️ Finger Bending Levels")
+        m_thumb = st.sidebar.slider("Thumb (D32)", 800, 3600, 3200)
+        m_index = st.sidebar.slider("Index (D33)", 800, 3600, 3200)
+        m_middle = st.sidebar.slider("Middle (D34)", 800, 3600, 3200)
+        m_ring = st.sidebar.slider("Ring (D35)", 800, 3600, 3200)
+        m_little = st.sidebar.slider("Little (VP)", 800, 3600, 3200)
 
         st.sidebar.markdown("##### 🧭 IMU Hand Tilt")
         m_ax = st.sidebar.slider("Accel X (Side-tilt)", -10.0, 10.0, 0.0)
@@ -242,10 +410,11 @@ else:  # Interactive Simulation
             "gyro": [0.0, 0.0, 0.0],
         }
 
+# Model Tuning
 st.sidebar.divider()
-st.sidebar.subheader("Model Inference Settings")
-conf_threshold = st.sidebar.slider("Confidence Threshold", 0.50, 0.95, 0.70, 0.05)
-smoothing_window = st.sidebar.slider("Smoothing Window Size", 1, 10, 5, 1)
+st.sidebar.markdown("#### 🧠 AI Model Tuning")
+conf_threshold = st.sidebar.slider("Confidence Gate", 0.50, 0.95, 0.70, 0.05, help="Predictions below this threshold fall back to UNKNOWN.")
+smoothing_window = st.sidebar.slider("Debounce Window (Frames)", 1, 10, 5, 1, help="Number of rolling frames required for majority vote.")
 
 if st.session_state.predictor:
     st.session_state.predictor.confidence_threshold = conf_threshold
@@ -253,28 +422,19 @@ if st.session_state.predictor:
 
 # Stream Toggle
 st.sidebar.divider()
-stream_active = st.sidebar.toggle("⚡ Start Live Stream Animation", value=True)
+stream_active = st.sidebar.toggle("⚡ Real-Time Auto Refresh", value=True)
 
 
 # ============================================================
-# MAIN INTERFACE
+# DATA RETRIEVAL (SERIAL VS SIMULATED)
 # ============================================================
-st.markdown('<div class="main-title">🧤 AI Smart Sign Language Glove</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Senior Design Project — Team 2 | Real-Time Gesture Recognition & Telemetry</div>', unsafe_allow_html=True)
-
-# Status notification if predictor or reader has issues
-if not st.session_state.predictor:
-    st.error(f"❌ ML Model not loaded: {getattr(st.session_state, 'predictor_error', 'Unknown error')}. Please run backend/train_model.py.")
-    st.stop()
-
-# Prepare current packet to display
 current_packet: Optional[Dict[str, Any]] = None
 
 if input_source == "Interactive Simulation":
+    badge_html = '<div class="status-badge badge-sim"><span class="pulse-dot"></span> VIRTUAL SIMULATOR</div>'
     if sim_mode == "Manual Sliders":
         current_packet = manual_packet
     elif sim_mode == "Live Playback Loop":
-        # Cycle through gestures every 5 seconds
         presets = ["OPEN_PALM", "CLOSED_FIST", "POINTING", "PEACE", "THUMBS_UP", "RESTING"]
         if time.time() - st.session_state.sim_last_cycle > 4.5:
             st.session_state.sim_last_cycle = time.time()
@@ -287,6 +447,7 @@ if input_source == "Interactive Simulation":
 elif input_source == "ESP32 USB Serial":
     reader = st.session_state.reader
     if reader and reader.is_connected:
+        badge_html = f'<div class="status-badge badge-live"><span class="pulse-dot"></span> LIVE: {reader.port} @ 115200</div>'
         is_valid, packet, _ = reader.read_packet()
         if is_valid and packet:
             st.session_state.last_packet = packet
@@ -296,12 +457,33 @@ elif input_source == "ESP32 USB Serial":
         else:
             current_packet = generate_simulated_packet("RESTING", noise=False)
     else:
-        st.info("💡 ESP32 is not connected. Connect via sidebar or switch Data Source to 'Interactive Simulation'.")
+        badge_html = '<div class="status-badge" style="background: rgba(239, 68, 68, 0.15); color: #F87171; border: 1px solid rgba(239, 68, 68, 0.3);">⚠️ HARDWARE DISCONNECTED</div>'
         current_packet = generate_simulated_packet("RESTING", noise=False)
 
 
 # ============================================================
-# REAL-TIME INFERENCE COMPUTATION
+# TOP HEADER BAR
+# ============================================================
+st.markdown(f"""
+<div class="header-bar">
+    <div>
+        <h1 class="header-title">AI Smart Sign Language Glove</h1>
+        <div class="header-subtitle">Senior Design Project • Team 2 | Real-Time Multimodal Sign Translation Telemetry</div>
+    </div>
+    <div>
+        {badge_html}
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# Verification check for model
+if not st.session_state.predictor:
+    st.error(f"❌ ML Model not found in `models/gesture_model.joblib`. Run `python backend/train_model.py` to train it.")
+    st.stop()
+
+
+# ============================================================
+# AI INFERENCE & SENTENCE BUILDER
 # ============================================================
 gesture, confidence, prob_dict = st.session_state.predictor.predict(current_packet)
 info = GESTURE_INFO.get(gesture, {})
@@ -309,164 +491,259 @@ emoji = info.get("emoji", "❓")
 meaning = info.get("meaning", "Transitioning or unrecognized")
 description = info.get("description", "")
 
-# Determine banner color based on state
-if gesture == "UNKNOWN":
-    banner_color = "#757575"  # Grey
-    status_label = "UNKNOWN / LOW CONFIDENCE"
-elif gesture == "RESTING":
-    banner_color = "#37474F"  # Dark Slate
-    status_label = "RESTING / NEUTRAL"
+# Update Sentence Builder / History
+if gesture not in ["UNKNOWN", "RESTING"]:
+    if gesture == st.session_state.last_stable_gesture:
+        st.session_state.gesture_hold_count += 1
+        # Add to sentence after holding stably for ~1.5 seconds (12 frames)
+        if st.session_state.gesture_hold_count == 12:
+            meaning_token = meaning.split("/")[0].strip().upper()
+            st.session_state.history_tokens.append(meaning_token)
+            if len(st.session_state.history_tokens) > 6:
+                st.session_state.history_tokens.pop(0)
+    else:
+        st.session_state.last_stable_gesture = gesture
+        st.session_state.gesture_hold_count = 1
 else:
-    banner_color = "#2E7D32"  # Success Green
-    status_label = "GESTURE RECOGNIZED"
+    st.session_state.gesture_hold_count = 0
+
+# Determine Card Gradient & Tone
+if gesture == "UNKNOWN":
+    banner_accent = "rgba(100, 116, 139, 0.3)"
+    status_label = "TRANSITIONING / UNCERTAIN"
+    badge_color = "#94A3B8"
+elif gesture == "RESTING":
+    banner_accent = "rgba(51, 65, 85, 0.4)"
+    status_label = "RESTING / NEUTRAL HAND"
+    badge_color = "#64748B"
+else:
+    banner_accent = "rgba(16, 185, 129, 0.25)"
+    status_label = "RECOGNIZED GESTURE"
+    badge_color = "#10B981"
 
 
 # ============================================================
-# TOP SECTION: GESTURE PREDICTION BANNER & PROBABILITIES
+# SECTION 1: HERO GESTURE CARD & PROBABILITY SPECTRUM
 # ============================================================
-col_banner, col_probs = st.columns([1.2, 1.0])
+col_hero, col_prob_bars = st.columns([1.3, 1.0])
 
-with col_banner:
+with col_hero:
     st.markdown(f"""
-    <div class="gesture-banner" style="background-color: {banner_color};">
-        <div style="font-size: 0.9rem; letter-spacing: 2px; text-transform: uppercase; opacity: 0.85;">{status_label}</div>
-        <div style="font-size: 3.5rem; margin: 10px 0;">{emoji} {gesture}</div>
-        <div style="font-size: 1.3rem; font-weight: 600;">{meaning}</div>
-        <div style="font-size: 0.9rem; opacity: 0.85; margin-top: 5px;">Confidence: <b>{confidence*100:.1f}%</b> | {description}</div>
+    <div class="hero-card" style="border-left: 6px solid {badge_color}; background: radial-gradient(circle at top right, {banner_accent}, rgba(15, 23, 42, 0.9) 60%);">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div style="font-size: 0.8rem; font-weight: 700; letter-spacing: 1.5px; color: {badge_color}; text-transform: uppercase;">
+                {status_label}
+            </div>
+            <div style="background: rgba(255,255,255,0.08); padding: 4px 10px; border-radius: 9999px; font-size: 0.8rem; font-weight: 600; color: #E2E8F0;">
+                Confidence: <span style="color: {badge_color}; font-weight: 800;">{confidence*100:.1f}%</span>
+            </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 20px; margin: 16px 0;">
+            <div class="gesture-emoji">{emoji}</div>
+            <div>
+                <div class="gesture-name">{gesture}</div>
+                <div class="gesture-meaning">"{meaning}"</div>
+            </div>
+        </div>
+        <div style="font-size: 0.85rem; color: #94A3B8; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 10px;">
+            <b>Description:</b> {description}
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
-with col_probs:
-    # Bar chart of class probabilities
+with col_prob_bars:
+    # Modern horizontal probability breakdown
     prob_df = pd.DataFrame({
         "Gesture": list(prob_dict.keys()),
-        "Probability": [v * 100 for v in prob_dict.values()]
-    }).sort_values(by="Probability", ascending=True)
+        "Confidence": [v * 100 for v in prob_dict.values()]
+    }).sort_values(by="Confidence", ascending=True)
 
-    fig_probs = px.bar(
-        prob_df,
-        x="Probability",
-        y="Gesture",
+    fig_probs = go.Figure()
+    fig_probs.add_trace(go.Bar(
+        x=prob_df["Confidence"],
+        y=prob_df["Gesture"],
         orientation="h",
-        text=prob_df["Probability"].apply(lambda v: f"{v:.1f}%"),
-        color="Probability",
-        color_continuous_scale="Blues",
-        range_x=[0, 100],
-        height=220,
-    )
+        text=prob_df["Confidence"].apply(lambda v: f"{v:.1f}%"),
+        textposition="outside",
+        textfont=dict(size=11, color="#CBD5E1"),
+        marker=dict(
+            color=prob_df["Confidence"],
+            colorscale=[[0, "#334155"], [0.4, "#38BDF8"], [1.0, "#10B981"]],
+            line=dict(width=0),
+        ),
+    ))
     fig_probs.update_layout(
-        margin=dict(l=10, r=10, t=10, b=10),
-        xaxis_title="Confidence (%)",
-        yaxis_title="",
-        coloraxis_showscale=False,
+        height=195,
+        margin=dict(l=10, r=45, t=10, b=10),
+        xaxis=dict(range=[0, 115], showgrid=False, showticklabels=False),
+        yaxis=dict(tickfont=dict(size=12, color="#E2E8F0")),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
     )
     st.plotly_chart(fig_probs, use_container_width=True)
 
+# Translation History Ticker Bar
+sentence_str = " ".join([f"[{t}]" for t in st.session_state.history_tokens])
+col_tick, col_clear = st.columns([5, 1])
+with col_tick:
+    st.markdown(f"""
+    <div class="ticker-container">
+        <div class="ticker-label">🗣️ Sign Stream:</div>
+        <div class="ticker-text">{sentence_str}</div>
+    </div>
+    """, unsafe_allow_html=True)
+with col_clear:
+    st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
+    if st.button("Clear Ticker", use_container_width=True):
+        st.session_state.history_tokens = []
+        st.rerun()
+
 
 # ============================================================
-# MIDDLE SECTION: 5 FLEX SENSORS BEND GAUGES
+# SECTION 2: 5-FINGER FLEX SENSOR TELEMETRY CARDS
 # ============================================================
-st.subheader("🖐️ 5-Finger Flex Sensors Telemetry")
+st.markdown("### 🖐️ 5-Finger Flex Sensors Telemetry")
 
 flex_cols = st.columns(5)
 flex_values = current_packet["flex"]
+finger_emojis = ["👍", "☝️", "🖕", "💍", "🤙"]
+pin_labels = ["D32", "D33", "D34", "D35", "VP (36)"]
 
 for i, col in enumerate(flex_cols):
     raw_val = flex_values[i]
     bend_pct = raw_to_bend_pct(raw_val)
     volt = adc_to_voltage(raw_val)
     finger_name = FLEX_SENSOR_NAMES[i]
+    emoji_ico = finger_emojis[i]
+    pin_tag = pin_labels[i]
 
-    # Finger state label
+    # Color code bend state
     if bend_pct > 65:
-        state_text = "🔴 Bent"
+        state_badge = '<span style="color: #F43F5E; font-weight: 700;">🔴 Bent (90°)</span>'
+        bar_color = "#F43F5E"
     elif bend_pct > 30:
-        state_text = "🟡 Partial"
+        state_badge = '<span style="color: #FBBF24; font-weight: 700;">🟡 Flexed</span>'
+        bar_color = "#FBBF24"
     else:
-        state_text = "🟢 Straight"
+        state_badge = '<span style="color: #34D399; font-weight: 700;">🟢 Flat / Straight</span>'
+        bar_color = "#34D399"
 
     with col:
-        st.markdown(f"**{finger_name}**")
-        st.progress(int(bend_pct))
-        st.metric(
-            label=f"{bend_pct:.0f}% Bend",
-            value=f"{raw_val} ADC",
-            delta=f"{volt:.2f} V",
-            delta_color="off"
-        )
-        st.caption(f"State: {state_text}")
+        st.markdown(f"""
+        <div class="finger-box">
+            <div class="finger-header">{emoji_ico} {finger_name} <span style="font-size: 0.75rem; color: #64748B;">({pin_tag})</span></div>
+            <div class="finger-adc">{raw_val} <span style="font-size: 0.8rem; color: #94A3B8;">ADC</span></div>
+            <div class="finger-meta">{volt:.2f} V • {bend_pct:.0f}% Bend</div>
+            <div style="background: rgba(255,255,255,0.1); height: 6px; border-radius: 999px; margin: 10px 0 8px 0; overflow: hidden;">
+                <div style="background: {bar_color}; width: {bend_pct}%; height: 100%; border-radius: 999px;"></div>
+            </div>
+            <div style="font-size: 0.8rem;">{state_badge}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
 
 # ============================================================
-# LOWER SECTION: MPU6050 ORIENTATION & MOTION
+# SECTION 3: MPU6050 6-DOF IMU MOTION & HAND ATTITUDE
 # ============================================================
-st.subheader("🧭 Hand Orientation & Motion (MPU6050 IMU)")
+st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+st.markdown("### 🧭 Hand Orientation & Motion (MPU6050 6-DOF IMU)")
 
-imu_col1, imu_col2, imu_col3 = st.columns(3)
+imu_col1, imu_col2, imu_col3 = st.columns([1.1, 1.1, 1.0])
 
 ax, ay, az = current_packet["accel"]
 gx, gy, gz = current_packet["gyro"]
 
-# Calculate approximate Roll & Pitch angles
+# Math: Approximate Roll & Pitch angles
 eps = 1e-4
 pitch = math.atan2(-ax, math.sqrt(ay*ay + az*az + eps)) * 180.0 / math.pi
 roll = math.atan2(ay, az + eps) * 180.0 / math.pi
 accel_mag = math.sqrt(ax*ax + ay*ay + az*az)
 
+# Posture description
+if abs(pitch) < 15 and abs(roll) < 15:
+    posture_desc = "Palm Flat / Level"
+elif pitch > 35:
+    posture_desc = "Fingers Tilted Upward"
+elif pitch < -35:
+    posture_desc = "Fingers Pointing Downward"
+elif roll > 35:
+    posture_desc = "Hand Rolled Right"
+elif roll < -35:
+    posture_desc = "Hand Rolled Left"
+else:
+    posture_desc = "Angled Orientation"
+
 with imu_col1:
-    st.markdown("##### Accelerometer (m/s²)")
+    st.markdown("##### 📈 Linear Acceleration (m/s²)")
     fig_accel = go.Figure(go.Bar(
         x=["X (Side)", "Y (Fwd)", "Z (Vert)"],
         y=[ax, ay, az],
-        marker_color=["#1976D2", "#388E3C", "#D32F2F"],
+        marker=dict(color=["#38BDF8", "#34D399", "#F43F5E"]),
+        text=[f"{v:.1f}" for v in [ax, ay, az]],
+        textposition="outside",
     ))
     fig_accel.update_layout(
-        height=180,
+        height=175,
         margin=dict(l=20, r=20, t=10, b=20),
-        yaxis=dict(range=[-12, 12], title="m/s²"),
+        yaxis=dict(range=[-14, 14], showgrid=True, gridcolor="rgba(255,255,255,0.06)"),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#94A3B8"),
     )
     st.plotly_chart(fig_accel, use_container_width=True)
 
 with imu_col2:
-    st.markdown("##### Gyroscope (°/s)")
+    st.markdown("##### 🔄 Angular Velocity (°/s)")
     fig_gyro = go.Figure(go.Bar(
-        x=["X", "Y", "Z"],
+        x=["Pitch Rate", "Roll Rate", "Yaw Rate"],
         y=[gx, gy, gz],
-        marker_color=["#7B1FA2", "#F57C00", "#0097A7"],
+        marker=dict(color=["#818CF8", "#F59E0B", "#06B6D4"]),
+        text=[f"{v:.0f}" for v in [gx, gy, gz]],
+        textposition="outside",
     ))
     fig_gyro.update_layout(
-        height=180,
+        height=175,
         margin=dict(l=20, r=20, t=10, b=20),
-        yaxis=dict(range=[-180, 180], title="°/s"),
+        yaxis=dict(range=[-180, 180], showgrid=True, gridcolor="rgba(255,255,255,0.06)"),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#94A3B8"),
     )
     st.plotly_chart(fig_gyro, use_container_width=True)
 
 with imu_col3:
-    st.markdown("##### Hand Posture Tilt")
-    st.metric("Pitch (Tilt forward/back)", f"{pitch:.1f}°")
-    st.metric("Roll (Rotate side/side)", f"{roll:.1f}°")
-    st.caption(f"Total Acceleration: {accel_mag:.2f} m/s² (1G ≈ 9.81 m/s²)")
+    st.markdown("##### 📐 Hand Attitude / Posture")
+    st.markdown(f"""
+    <div style="background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px; margin-bottom: 8px;">
+        <div style="font-size: 0.8rem; color: #94A3B8;">Estimated Posture:</div>
+        <div style="font-size: 1.15rem; font-weight: 700; color: #38BDF8; margin: 2px 0 10px 0;">{posture_desc}</div>
+        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px;">
+            <span>Pitch: <b style="color: #F8FAFC;">{pitch:+.1f}°</b></span>
+            <span>Roll: <b style="color: #F8FAFC;">{roll:+.1f}°</b></span>
+            <span>G-Force: <b style="color: #F8FAFC;">{accel_mag/9.81:.2f}G</b></span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 
 # ============================================================
-# BOTTOM SECTION: DIAGNOSTICS & PACKET INSPECTOR
+# SECTION 4: STREAM DIAGNOSTICS & PACKET INSPECTOR
 # ============================================================
-with st.expander("🔍 Stream Diagnostics & Raw JSON Packet Inspector", expanded=False):
+with st.expander("🔍 System Diagnostics & Raw JSON Telemetry Packet", expanded=False):
     d_col1, d_col2 = st.columns([1, 2])
     with d_col1:
-        st.write("**Packet Metadata:**")
+        st.write("**Stream Telemetry:**")
         st.write(f"- Timestamp: `{current_packet['timestamp_ms']} ms`")
-        st.write(f"- Source: `{input_source}`")
+        st.write(f"- Mode: `{input_source}`")
         if input_source == "ESP32 USB Serial" and st.session_state.reader:
-            st.write(f"- Valid Packets: `{st.session_state.reader.valid_packets}`")
-            st.write(f"- Packet Rate: `{st.session_state.reader.get_packet_rate():.1f} Hz`")
+            st.write(f"- Valid Frames Received: `{st.session_state.reader.valid_packets}`")
+            st.write(f"- Data Rate: `{st.session_state.reader.get_packet_rate():.1f} Hz`")
     with d_col2:
-        st.write("**Raw JSON Payload:**")
+        st.write("**Raw JSON Packet Payload:**")
         st.json(current_packet)
 
 
 # Continuous streaming loop when live toggle is on
 if stream_active:
-    time.sleep(0.08)  # ~12 FPS refresh for smooth UI without freezing browser
+    time.sleep(0.08)  # ~12 FPS refresh rate for buttery smooth UI without freezing the browser
     st.rerun()
-
