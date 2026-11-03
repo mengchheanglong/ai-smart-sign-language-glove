@@ -231,6 +231,7 @@ class SerialReader:
     def read_packet(self) -> Tuple[bool, Optional[Dict[str, Any]], str]:
         """
         Read a single line from the connection and parse/validate.
+        Automatically skips non-JSON boot/debug messages to find valid packets.
         
         Returns:
             (is_valid, packet_dict_or_none, raw_line_str)
@@ -239,33 +240,36 @@ class SerialReader:
             return False, None, ""
 
         try:
-            line_bytes = self.ser.readline()
-            if not line_bytes:
-                return False, None, ""
+            # Try up to 5 lines to skip boot banners or debug text
+            for _ in range(5):
+                line_bytes = self.ser.readline()
+                if not line_bytes:
+                    break
 
-            raw_line = line_bytes.decode("utf-8", errors="replace").strip()
-            if not raw_line:
-                return False, None, ""
+                raw_line = line_bytes.decode("utf-8", errors="replace").strip()
+                if not raw_line:
+                    continue
 
-            # Check if line looks like JSON
-            if not (raw_line.startswith("{") and raw_line.endswith("}")):
-                return False, None, raw_line
+                # Check if line looks like JSON
+                if raw_line.startswith("{") and raw_line.endswith("}"):
+                    try:
+                        packet = json.loads(raw_line)
+                    except json.JSONDecodeError:
+                        self.invalid_packets += 1
+                        continue
 
-            packet = json.loads(raw_line)
-            is_valid, error = validate_sensor_packet(packet)
+                    is_valid, error = validate_sensor_packet(packet)
+                    self.total_packets += 1
+                    if is_valid:
+                        self.valid_packets += 1
+                        self.last_packet_time = time.time()
+                        return True, packet, raw_line
+                    else:
+                        self.invalid_packets += 1
+                        return False, None, raw_line
 
-            self.total_packets += 1
-            if is_valid:
-                self.valid_packets += 1
-                self.last_packet_time = time.time()
-                return True, packet, raw_line
-            else:
-                self.invalid_packets += 1
-                return False, None, raw_line
+            return False, None, ""
 
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            self.invalid_packets += 1
-            return False, None, raw_line
         except Exception as e:
             # Handle possible unplugging
             self.is_connected = False

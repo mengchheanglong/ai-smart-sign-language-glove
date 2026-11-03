@@ -418,23 +418,50 @@ if input_source == SOURCE_SERIAL:
         label_visibility="collapsed",
     )
 
-    col_conn, col_disc = st.sidebar.columns(2)
-    if col_conn.button("Connect", width="stretch", type="primary"):
+    if "user_disconnected" not in st.session_state:
+        st.session_state.user_disconnected = False
+
+    is_conn = st.session_state.reader is not None and getattr(st.session_state.reader, "is_connected", False)
+
+    # Automatic connection on selection
+    if not is_conn and not st.session_state.user_disconnected and selected_port:
         try:
-            reader = SerialReader(port=selected_port, baud_rate=baud_rate)
+            reader = SerialReader(port=selected_port, baud_rate=baud_rate, timeout=0.5)
             if reader.connect():
                 st.session_state.reader = reader
+                is_conn = True
+        except Exception:
+            pass
+
+    col_conn, col_disc = st.sidebar.columns(2)
+    if col_conn.button("Connect", width="stretch", type="primary" if not is_conn else "secondary"):
+        st.session_state.user_disconnected = False
+        try:
+            if st.session_state.reader:
+                st.session_state.reader.disconnect()
+            reader = SerialReader(port=selected_port, baud_rate=baud_rate, timeout=0.5)
+            if reader.connect():
+                st.session_state.reader = reader
+                is_conn = True
                 st.sidebar.success(f"Connected to {selected_port}")
             else:
-                st.sidebar.error("Port did not open. Check the USB cable and driver.")
+                st.sidebar.error("Port did not open. Check the USB cable.")
         except Exception as e:
             st.sidebar.error(f"Connection failed: {e}")
 
     if col_disc.button("Disconnect", width="stretch"):
+        st.session_state.user_disconnected = True
         if st.session_state.reader:
             st.session_state.reader.disconnect()
             st.session_state.reader = None
+            is_conn = False
             st.sidebar.info("Disconnected")
+
+    # Status indicator in sidebar
+    if is_conn:
+        st.sidebar.markdown(f'<div style="color: #10B981; font-weight: 700; font-size: 0.85rem; margin-top: 4px;">● Connected to {selected_port}</div>', unsafe_allow_html=True)
+    else:
+        st.sidebar.markdown('<div style="color: #EF4444; font-weight: 600; font-size: 0.85rem; margin-top: 4px;">○ Disconnected (Click Connect)</div>', unsafe_allow_html=True)
 
     st.sidebar.markdown('<div class="side-title">DEVICE FEEDBACK</div>', unsafe_allow_html=True)
     col_led, col_buzz = st.sidebar.columns(2)
