@@ -1,0 +1,41 @@
+[
+    {
+        "description": "Valid packet — hand at rest",
+        "packet": {
+            "timestamp_ms": 1000,
+            "flex": [2800, 2750, 2900, 2700, 2650],
+            "accel": [0.05, -0.12, 9.78],
+            "gyro": [0.01, -0.02, 0.01]
+        },
+        "expected_valid": true
+    },
+    {
+        "description": "Valid packet — closed fist",
+        "packet": {
+            "timestamp_ms": 2000,
+            "flex": [800, 750, 700, 850, 900],
+            "accel": [0.10, 0.05, 9.80],
+            "gyro": [0.00, 0.00, 0.00]
+        },
+        "expected_valid": true
+    },
+    {
+        "description": "Invalid — missing gyro",
+        "packet": {
+            "timestamp_ms": 3000,
+            "flex": [2800, 2750, 2900, 2700, 2650],
+            "accel": [0.0, 0.0, 9.81]
+        },
+        "expected_valid": false
+    },
+    {
+        "description": "Invalid — flex value out of range",
+        "packet": {
+            "timestamp_ms": 4000,
+            "flex": [2800, 2750, 5000, 2700, 2650],
+            "accel": [0.0, 0.0, 9.81],
+            "gyro": [0.0, 0.0, 0.0]
+        },
+        "expected_valid": false
+    }
+]

@@ -1,0 +1,23 @@
+# AI Smart Sign Language Glove — Python Dependencies
+# Team 2 — Senior Design Project
+#
+# Install with: pip install -r requirements.txt
+# (Make sure your virtual environment is activated first!)
+
+# Serial communication with ESP32
+pyserial>=3.5
+
+# Data handling
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Machine learning
+scikit-learn>=1.3.0
+joblib>=1.3.0
+
+# Dashboard and visualization
+streamlit>=1.28.0
+plotly>=5.18.0
+
+# Utilities
+python-dotenv>=1.0.0

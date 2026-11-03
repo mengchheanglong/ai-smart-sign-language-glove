@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+venv/
+env/
+.env
+
+# PlatformIO
+firmware/.pio/
+firmware/.vscode/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Project-specific
+models/*.joblib
+models/*.pkl
+!models/.gitkeep
+dataset/*.csv
+!dataset/.gitkeep
+
+# Logs
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
