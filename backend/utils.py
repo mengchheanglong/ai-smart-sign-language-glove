@@ -39,30 +39,42 @@ FIRMWARE_DIR = PROJECT_ROOT / "firmware"
 DEFAULT_BAUD_RATE = int(os.getenv("SERIAL_BAUD_RATE", "115200"))
 
 
-def find_serial_ports():
+def find_serial_ports(prefer_usb=True):
     """
     Detect available serial ports on the current operating system.
     
-    Returns:
-        list: A list of available serial port names (e.g., ['COM3'] or ['/dev/ttyUSB0'])
+    Args:
+        prefer_usb (bool): If True, filters out virtual Bluetooth ports
+                           and prioritizes real USB-to-UART bridges.
     
-    How it works:
-        - Windows: Checks COM1 through COM256
-        - macOS: Looks for /dev/cu.usb* devices
-        - Linux: Looks for /dev/ttyUSB* and /dev/ttyACM* devices
+    Returns:
+        list: A list of dicts with port, description, manufacturer.
     """
     import serial.tools.list_ports
     
     ports = serial.tools.list_ports.comports()
     available = []
+    usb_ports = []
     
     for port in ports:
-        available.append({
+        info = {
             "port": port.device,
             "description": port.description,
             "manufacturer": port.manufacturer or "Unknown"
-        })
-    
+        }
+        available.append(info)
+        
+        desc_lower = (port.description or "").lower()
+        hwid_lower = (port.hwid or "").lower()
+        # Filter out virtual Bluetooth links
+        if "bluetooth" not in desc_lower and "bthenum" not in hwid_lower:
+            if any(k in desc_lower or k in hwid_lower for k in ["ch34", "cp21", "ftdi", "usb", "uart"]):
+                usb_ports.append(info)
+            elif "com" in port.device.lower():
+                usb_ports.append(info)
+
+    if prefer_usb and usb_ports:
+        return usb_ports
     return available
 
 
@@ -72,7 +84,7 @@ def get_serial_port():
     
     Priority:
         1. SERIAL_PORT environment variable (from .env file)
-        2. Auto-detect if only one port is available
+        2. Auto-detect if only one real USB port is available
         3. Ask the user to choose
     
     Returns:
@@ -83,8 +95,8 @@ def get_serial_port():
     if env_port:
         return env_port
     
-    # Try to auto-detect
-    ports = find_serial_ports()
+    # Try to auto-detect USB ports
+    ports = find_serial_ports(prefer_usb=True)
     
     if len(ports) == 0:
         raise RuntimeError(
@@ -92,12 +104,12 @@ def get_serial_port():
         )
     elif len(ports) == 1:
         port = ports[0]["port"]
-        print(f"✅ Auto-detected serial port: {port} ({ports[0]['description']})")
+        print(f"[OK] Auto-detected serial port: {port} ({ports[0]['description']})")
         return port
     else:
-        print("📋 Multiple serial ports found:")
+        print("[INFO] Multiple serial ports found:")
         for i, p in enumerate(ports):
-            print(f"   [{i + 1}] {p['port']} — {p['description']}")
+            print(f"   [{i + 1}] {p['port']} - {p['description']}")
         
         while True:
             try:
