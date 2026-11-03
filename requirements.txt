@@ -16,7 +16,8 @@ scikit-learn>=1.3.0
 joblib>=1.3.0
 
 # Dashboard and visualization
-streamlit>=1.28.0
+# 1.66 is the release the telemetry console is tested against (width="stretch" API)
+streamlit>=1.66.0
 plotly>=5.18.0
 
 # Utilities

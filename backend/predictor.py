@@ -89,6 +89,20 @@ class GesturePredictor:
             self.feature_names = FEATURE_NAMES
             self.classes = list(self.model.classes_)
 
+    def set_smoothing_window(self, window: int):
+        """
+        Apply a new majority-vote window size to a live predictor.
+
+        Rebuilds the rolling deque so the new size takes effect immediately;
+        assigning self.smoothing_window alone would leave the old maxlen in place.
+        """
+        window = max(1, int(window))
+        if window == self.smoothing_window and self._window.maxlen == window:
+            return
+        kept = list(self._window)[-window:]
+        self.smoothing_window = window
+        self._window = deque(kept, maxlen=window)
+
     def reset(self):
         """Clear smoothing history."""
         self._window.clear()

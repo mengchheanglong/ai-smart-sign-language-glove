@@ -119,6 +119,7 @@ ai-smart-sign-language-glove/
     ├── INSTALLATION.md         ← Setup guide
     ├── HARDWARE_WIRING.md      ← Wiring diagrams and pin tables
     ├── CALIBRATION.md          ← Sensor calibration procedure
+    ├── DASHBOARD_UI.md         ← Dashboard design system and decisions
     └── TROUBLESHOOTING.md      ← Common issues and fixes
 ```
 

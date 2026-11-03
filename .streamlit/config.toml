@@ -1,0 +1,11 @@
+[theme]
+# Matches the dashboard's design tokens so Streamlit's own widgets (sliders,
+# selectboxes, focus rings) sit in the same surface as the console chrome.
+base = "light"
+primaryColor = "#1B62D6"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#FAFAFA"
+textColor = "#18181B"
+
+[browser]
+gatherUsageStats = false

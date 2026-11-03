@@ -219,6 +219,25 @@ The reading stays the same no matter how you bend the sensor. **Possible causes:
 
 ---
 
+### Code Changes Not Appearing in the Dashboard
+
+**`AttributeError: 'GesturePredictor' object has no attribute ...` after editing `backend/`:**
+
+Streamlit re-runs `dashboard/app.py` on every interaction, but modules it has already imported
+(`backend/predictor.py`, `backend/utils.py`) stay cached in the running server's memory. Editing a backend
+module while the dashboard is running can pair the new UI code with an old backend class — the page then
+raises `AttributeError` on a method that does exist on disk.
+
+Confirm the method is in the file, then restart the dashboard (Ctrl+C in its terminal, then start it again):
+
+```bash
+streamlit run dashboard/app.py
+```
+
+Hot reload is reliable for `dashboard/app.py` itself; restart the server after changing anything under `backend/`.
+
+---
+
 ### Model File Not Found
 
 **"FileNotFoundError: model.joblib"**
