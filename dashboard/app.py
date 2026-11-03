@@ -659,9 +659,9 @@ if not st.session_state.predictor:
 inference_packet = dict(current_packet)
 if st.session_state.get("single_sensor_bench", False):
     inf_flex = list(current_packet["flex"])
+    # In single-sensor bench mode, hold all other 4 channels at neutral straight (3200)
     for k in range(1, 5):
-        if inf_flex[k] < 100:
-            inf_flex[k] = 3200  # neutral straight fallback for disconnected bench pins
+        inf_flex[k] = 3200
     inference_packet["flex"] = inf_flex
 
 gesture, confidence, prob_dict = st.session_state.predictor.predict(inference_packet)
@@ -790,13 +790,18 @@ st.markdown(
 )
 
 flex_rows: List[str] = []
+is_bench = st.session_state.get("single_sensor_bench", False)
 for i, raw_val in enumerate(current_packet["flex"]):
     if i == 0:
         bend = raw_to_bend_pct(raw_val, st.session_state.cal_thumb_straight, st.session_state.cal_thumb_bent)
+        state_label, dot_class = bend_state(bend)
+    elif is_bench:
+        bend = None
+        state_label = "Unconnected (Bench Mode)"
+        dot_class = "dot dot-open"
     else:
         bend = raw_to_bend_pct(raw_val)
-
-    state_label, dot_class = bend_state(bend)
+        state_label, dot_class = bend_state(bend)
 
     if bend is not None:
         bend_cell = (
@@ -806,18 +811,27 @@ for i, raw_val in enumerate(current_packet["flex"]):
         state_cell = f'<span class="state"><span class="{dot_class}"></span>{state_label}</span>'
     else:
         bend_cell = '<div class="bendcell"><span class="meter"><i style="width:0%"></i></span><span class="num" style="color:var(--text-muted)">—</span></div>'
-        state_cell = '<span class="state" style="color:var(--text-muted)"><span class="dot dot-open"></span>Unconnected</span>'
+        state_cell = f'<span class="state" style="color:var(--text-muted)"><span class="dot dot-open"></span>{state_label}</span>'
+
+    # If pin is floating in bench mode, add subtle hint
+    adc_note = " <span style=\"font-size:0.75rem; color:var(--text-muted);\">(floating)</span>" if (is_bench and i > 0 and raw_val > 0) else ""
 
     flex_rows.append(
         "<tr>"
         f'<td class="name">{FLEX_SENSOR_NAMES[i]}</td>'
         f'<td class="num">{PIN_LABELS[i]}</td>'
-        f'<td class="num r">{raw_val}</td>'
+        f'<td class="num r">{raw_val}{adc_note}</td>'
         f'<td class="num r">{adc_to_voltage(raw_val):.2f}</td>'
         f'<td>{bend_cell}</td>'
         f'<td>{state_cell}</td>'
         "</tr>"
     )
+
+note_text = (
+    "Single-Sensor Bench Mode active: Channels 1–4 are disconnected and held at neutral straight. Floating ADC noise is ignored."
+    if is_bench else
+    "Bend is normalised against calibration. Unconnected pins (ADC &lt; 80) are detected and omitted from bend calculations."
+)
 
 st.markdown(
     '<table class="tbl">'
@@ -827,7 +841,7 @@ st.markdown(
     "</tr></thead><tbody>"
     + "".join(flex_rows)
     + "</tbody></table>"
-    '<div class="tbl-note">Bend is normalised against calibration. Unconnected pins (ADC &lt; 80) are detected and omitted from bend calculations.</div>',
+    f'<div class="tbl-note">{note_text}</div>',
     unsafe_allow_html=True,
 )
 
