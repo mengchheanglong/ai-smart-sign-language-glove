@@ -273,16 +273,31 @@ if "session_start" not in st.session_state:
     st.session_state.session_start = time.time()
 if "frames_seen" not in st.session_state:
     st.session_state.frames_seen = 0
+if "cal_thumb_straight" not in st.session_state:
+    st.session_state.cal_thumb_straight = 3200
+if "cal_thumb_bent" not in st.session_state:
+    st.session_state.cal_thumb_bent = 1100
+if "single_sensor_bench" not in st.session_state:
+    st.session_state.single_sensor_bench = True
 
 
 # ============================================================
 # HELPERS
 # ============================================================
-def raw_to_bend_pct(raw_adc: int, straight_adc: int = 3200, bent_adc: int = 1100) -> float:
-    """Map a raw ADC reading to 0-100% bend against the divider calibration."""
+def raw_to_bend_pct(raw_adc: int, straight_adc: int = 3200, bent_adc: int = 1100) -> Optional[float]:
+    """
+    Map a raw ADC reading to 0-100% bend against the divider calibration.
+    Returns None if reading indicates an unplugged/floating pin (ADC < 80).
+    Works automatically whether straight > bent (high-side flex) or straight < bent (low-side flex).
+    """
+    if raw_adc < 80:
+        return None
     if straight_adc == bent_adc:
         return 0.0
-    pct = ((straight_adc - raw_adc) / float(straight_adc - bent_adc)) * 100.0
+    if straight_adc > bent_adc:
+        pct = ((straight_adc - raw_adc) / float(straight_adc - bent_adc)) * 100.0
+    else:
+        pct = ((raw_adc - straight_adc) / float(bent_adc - straight_adc)) * 100.0
     return max(0.0, min(100.0, pct))
 
 
@@ -290,8 +305,10 @@ def adc_to_voltage(raw_adc: int) -> float:
     return (raw_adc / 4095.0) * 3.3
 
 
-def bend_state(pct: float) -> Tuple[str, str]:
-    """Return (label, dot class). Shape carries the state, so colour is optional."""
+def bend_state(pct: Optional[float]) -> Tuple[str, str]:
+    """Return (label, dot class). Shape carries the state."""
+    if pct is None:
+        return "Unconnected", "dot dot-open"
     if pct > 65:
         return "Bent", "dot"
     if pct > 30:
@@ -455,6 +472,13 @@ if input_source == SOURCE_SERIAL:
         st.sidebar.markdown(f'<div style="color: #10B981; font-weight: 700; font-size: 0.85rem; margin-top: 4px;">● Connected to {selected_port}</div>', unsafe_allow_html=True)
     else:
         st.sidebar.markdown('<div style="color: #EF4444; font-weight: 600; font-size: 0.85rem; margin-top: 4px;">○ Disconnected (Click Connect)</div>', unsafe_allow_html=True)
+
+    st.sidebar.markdown('<div class="side-title">BENCH TESTING</div>', unsafe_allow_html=True)
+    st.session_state.single_sensor_bench = st.sidebar.toggle(
+        "Single-sensor test mode",
+        value=st.session_state.single_sensor_bench,
+        help="When testing with only 1 breadboard flex sensor (GPIO32), holds disconnected pins at straight so the ML classifier is not biased.",
+    )
 
     st.sidebar.markdown('<div class="side-title">DEVICE FEEDBACK</div>', unsafe_allow_html=True)
     col_led, col_buzz = st.sidebar.columns(2)
@@ -632,7 +656,15 @@ if not st.session_state.predictor:
 # ============================================================
 # INFERENCE
 # ============================================================
-gesture, confidence, prob_dict = st.session_state.predictor.predict(current_packet)
+inference_packet = dict(current_packet)
+if st.session_state.get("single_sensor_bench", False):
+    inf_flex = list(current_packet["flex"])
+    for k in range(1, 5):
+        if inf_flex[k] < 100:
+            inf_flex[k] = 3200  # neutral straight fallback for disconnected bench pins
+    inference_packet["flex"] = inf_flex
+
+gesture, confidence, prob_dict = st.session_state.predictor.predict(inference_packet)
 info = GESTURE_INFO.get(gesture, {})
 meaning = info.get("meaning", "Unrecognised")
 description = info.get("description", "")
@@ -759,17 +791,31 @@ st.markdown(
 
 flex_rows: List[str] = []
 for i, raw_val in enumerate(current_packet["flex"]):
-    bend = raw_to_bend_pct(raw_val)
+    if i == 0:
+        bend = raw_to_bend_pct(raw_val, st.session_state.cal_thumb_straight, st.session_state.cal_thumb_bent)
+    else:
+        bend = raw_to_bend_pct(raw_val)
+
     state_label, dot_class = bend_state(bend)
+
+    if bend is not None:
+        bend_cell = (
+            f'<div class="bendcell"><span class="meter"><i style="width:{bend:.0f}%"></i></span>'
+            f'<span class="num">{bend:.0f}%</span></div>'
+        )
+        state_cell = f'<span class="state"><span class="{dot_class}"></span>{state_label}</span>'
+    else:
+        bend_cell = '<div class="bendcell"><span class="meter"><i style="width:0%"></i></span><span class="num" style="color:var(--text-muted)">—</span></div>'
+        state_cell = '<span class="state" style="color:var(--text-muted)"><span class="dot dot-open"></span>Unconnected</span>'
+
     flex_rows.append(
         "<tr>"
         f'<td class="name">{FLEX_SENSOR_NAMES[i]}</td>'
         f'<td class="num">{PIN_LABELS[i]}</td>'
         f'<td class="num r">{raw_val}</td>'
         f'<td class="num r">{adc_to_voltage(raw_val):.2f}</td>'
-        f'<td><div class="bendcell"><span class="meter"><i style="width:{bend:.0f}%"></i></span>'
-        f'<span class="num">{bend:.0f}%</span></div></td>'
-        f'<td><span class="state"><span class="{dot_class}"></span>{state_label}</span></td>'
+        f'<td>{bend_cell}</td>'
+        f'<td>{state_cell}</td>'
         "</tr>"
     )
 
@@ -781,10 +827,29 @@ st.markdown(
     "</tr></thead><tbody>"
     + "".join(flex_rows)
     + "</tbody></table>"
-    '<div class="tbl-note">Bend is normalised against the divider calibration (3200 ADC straight, 1100 ADC bent), '
-    "so it is comparable across channels on this glove but not across different gloves.</div>",
+    '<div class="tbl-note">Bend is normalised against calibration. Unconnected pins (ADC &lt; 80) are detected and omitted from bend calculations.</div>',
     unsafe_allow_html=True,
 )
+
+with st.expander("⚙️ Thumb (GPIO32) Calibration & Bench Controls", expanded=False):
+    st.caption(f"Current live Thumb reading: **{current_packet['flex'][0]} ADC** ({adc_to_voltage(current_packet['flex'][0]):.2f} V) · Straight: **{st.session_state.cal_thumb_straight}** · Bent: **{st.session_state.cal_thumb_bent}**")
+    c_flat, c_bent, c_rst = st.columns(3)
+    with c_flat:
+        if st.button("📍 Set Flat (0% Bend)", use_container_width=True, help="Set current reading as flat/straight position"):
+            st.session_state.cal_thumb_straight = current_packet["flex"][0]
+            st.toast(f"Calibrated Flat to {current_packet['flex'][0]} ADC", icon="📏")
+            st.rerun()
+    with c_bent:
+        if st.button("✊ Set Bent (100% Bend)", use_container_width=True, help="Set current reading as fully bent position"):
+            st.session_state.cal_thumb_bent = current_packet["flex"][0]
+            st.toast(f"Calibrated Bent to {current_packet['flex'][0]} ADC", icon="📐")
+            st.rerun()
+    with c_rst:
+        if st.button("Reset Defaults", use_container_width=True, help="Restore factory calibration limits (3200 / 1100)"):
+            st.session_state.cal_thumb_straight = 3200
+            st.session_state.cal_thumb_bent = 1100
+            st.toast("Restored calibration defaults", icon="🔄")
+            st.rerun()
 
 
 # ============================================================
