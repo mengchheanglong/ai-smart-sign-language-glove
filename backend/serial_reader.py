@@ -277,6 +277,25 @@ class SerialReader:
                         self.invalid_packets += 1
                         return False, None, raw_line
 
+                # Support single-sensor benchmark diagnostic sketch lines
+                elif "GPIO32:" in raw_line:
+                    try:
+                        val_str = raw_line.split("GPIO32:")[1].split("(")[0].strip()
+                        raw_adc = int(val_str)
+                        packet = {
+                            "timestamp_ms": int(time.time() * 1000),
+                            "flex": [raw_adc, 2400, 2400, 2400, 2400],
+                            "accel": [0.0, 0.0, 9.81],
+                            "gyro": [0.0, 0.0, 0.0],
+                            "imu_valid": False,
+                        }
+                        self.total_packets += 1
+                        self.valid_packets += 1
+                        self.last_packet_time = time.time()
+                        return True, packet, raw_line
+                    except Exception:
+                        continue
+
             return False, None, ""
 
         except Exception as e:
