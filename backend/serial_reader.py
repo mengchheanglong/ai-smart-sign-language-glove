@@ -249,6 +249,14 @@ class SerialReader:
             return False, None, ""
 
         try:
+            # Drain backlog if serial buffer accumulated older frames to eliminate UI lag
+            if hasattr(self.ser, "in_waiting"):
+                try:
+                    while self.ser.in_waiting > 120:
+                        self.ser.readline()
+                except Exception:
+                    pass
+
             # Try up to 5 lines to skip boot banners or debug text
             for _ in range(5):
                 line_bytes = self.ser.readline()

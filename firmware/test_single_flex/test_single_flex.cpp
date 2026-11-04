@@ -37,5 +37,5 @@ void loop() {
   Serial.printf("--> GPIO32: %4d (%4d mV) | All ADC1: [32]=%d, [33]=%d, [34]=%d, [35]=%d, [36]=%d\n",
     raw32, mv32, raw32, analogRead(33), analogRead(34), analogRead(35), analogRead(36));
 
-  delay(250);
+  delay(40); // 25 Hz update rate for responsive real-time UI feedback
 }

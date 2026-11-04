@@ -1074,5 +1074,5 @@ with st.expander("Diagnostics and raw packet"):
 
 # Continuous refresh keeps the console following the stream
 if stream_active:
-    time.sleep(0.08)
+    time.sleep(0.03)
     st.rerun()
