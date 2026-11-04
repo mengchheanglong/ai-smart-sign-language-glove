@@ -10,7 +10,7 @@ Before you begin, make sure you have:
 
 | Tool | Version | Download |
 |---|---|---|
-| **Python** | 3.8 or newer (recommend 3.10 or 3.11) | [python.org/downloads](https://www.python.org/downloads/) |
+| **Python** | 3.10 or newer (recommend 3.11 or 3.12) | [python.org/downloads](https://www.python.org/downloads/) |
 | **VS Code** | Latest | [code.visualstudio.com](https://code.visualstudio.com/) |
 | **Git** | Latest | [git-scm.com/downloads](https://git-scm.com/downloads/) |
 

@@ -136,8 +136,8 @@ static const int DEFAULT_FLEX_BENT[NUM_FLEX_SENSORS]     = {1200, 1200, 1200, 12
 //   GND (-)  → ESP32 GND
 //   I/O / S  → ESP32 GPIO19 (labeled D19)
 //
-// Enabled by default for gesture feedback:
-#define BUZZER_ENABLED
+// Disabled by default for safety until passive buzzer hardware is connected and verified:
+// #define BUZZER_ENABLED
 #define BUZZER_PIN           19     // GPIO19 (D19, adjacent to GPIO18 LED pin)
 #define BUZZER_TONE_FREQ     2000   // Audio frequency in Hz (2000 Hz = crisp, pleasant beep)
 #define BUZZER_BEEP_MS       80     // Beep duration for gesture recognition (ms)

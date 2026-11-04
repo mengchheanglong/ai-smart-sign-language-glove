@@ -451,7 +451,9 @@ void processSerialInput() {
 #else
       Serial.println("[BUZZER] Buzzer support is disabled in config.h");
 #endif
-    } else if (cmd.indexOf("\"led\"") >= 0 || cmd.indexOf("gesture") >= 0 || cmd.indexOf("blink") >= 0) {
+    } else if (cmd.indexOf("\"led\": 1") >= 0 || cmd.indexOf("\"led\":1") >= 0 ||
+               cmd.indexOf("\"led\": true") >= 0 || cmd.indexOf("\"led\":true") >= 0 ||
+               cmd.indexOf("gesture") >= 0 || cmd.indexOf("blink") >= 0) {
       // JSON feedback from Python predictor: e.g. {"led": 1}
       triggerLedBlink();
 #ifdef BUZZER_ENABLED
@@ -498,7 +500,12 @@ void printJsonPacket(unsigned long timestampMs) {
   Serial.print(gyro_y, 2);
   Serial.print(",");
   Serial.print(gyro_z, 2);
-  Serial.print("]}\n");
+  Serial.print("]");
+
+  // Hardware status flag distinguishing real MPU6050 from neutral fallback
+  Serial.print(",\"imu_valid\":");
+  Serial.print(imuAvailable ? "true" : "false");
+  Serial.print("}\n");
 }
 
 /**
@@ -648,7 +655,11 @@ void loop() {
     if (currentOutputFormat == OUTPUT_FORMAT_JSON) {
       printJsonPacket(now);
     } else {
-      printHumanTable(now);
+      if (sensorMode == SENSOR_MODE_SINGLE_CH) {
+        printSingleSensorDiagnostic(now);
+      } else {
+        printHumanTable(now);
+      }
     }
   }
 }

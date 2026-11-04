@@ -14,7 +14,7 @@ import argparse
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Tuple, List, Dict, Any
+from typing import Tuple, List, Dict, Any, Optional
 
 if sys.platform == "win32":
     try:
@@ -179,9 +179,18 @@ def train_gesture_model(
     for g, count in df["gesture"].value_counts().items():
         print(f"  {g:<14}: {count} samples")
 
-    # 2. Split dataset by session or participant
-    group_col = "participant_id" if split_by == "participant" else "session_id"
-    train_df, test_df = split_by_session_or_group(df, group_col=group_col, test_group_val=test_session)
+    # 2. Split dataset by session, participant, or random stratified sample
+    if split_by == "random":
+        from sklearn.model_selection import train_test_split
+        min_class_count = df["gesture"].value_counts().min() if "gesture" in df.columns else 0
+        stratify = df["gesture"] if min_class_count >= 2 else None
+        train_df, test_df = train_test_split(df, test_size=0.25, random_state=42, stratify=stratify)
+        print(f"  Random stratified split: Train = {len(train_df)}, Test = {len(test_df)}")
+    else:
+        group_col = "participant_id" if split_by == "participant" else "session_id"
+        if group_col in df.columns and df[group_col].nunique() < 2:
+            print(f"  ⚠️ Warning: Only {df[group_col].nunique()} distinct {group_col} found. Separate recording sessions are required for leak-free evaluation.")
+        train_df, test_df = split_by_session_or_group(df, group_col=group_col, test_group_val=test_session)
 
     # 3. Extract features
     print(f"\nExtracting {len(FEATURE_NAMES)} engineered features...")
@@ -207,8 +216,9 @@ def train_gesture_model(
     acc = accuracy_score(y_test, y_pred)
     macro_f1 = f1_score(y_test, y_pred, average="macro")
 
+    eval_target = "random test split" if split_by == "random" else f"unseen {group_col}"
     print("\n" + "=" * 50)
-    print(f"  EVALUATION RESULTS (Tested on unseen {group_col})")
+    print(f"  EVALUATION RESULTS (Tested on {eval_target})")
     print("=" * 50)
     print(f"Overall Accuracy: {acc * 100:.2f}%")
     print(f"Macro F1-Score:   {macro_f1:.4f}\n")

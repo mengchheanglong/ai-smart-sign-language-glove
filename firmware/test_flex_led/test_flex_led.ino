@@ -45,7 +45,12 @@ void loop() {
   Serial.print("Flex Sensor Value: ");
   Serial.print(flexValue);
 
-  if (flexValue > threshold) {
+  // Documented voltage divider circuit:
+  // 3.3V -> Flex Sensor -> ADC Pin -> 10k Resistor -> GND
+  // When bent, flex resistance INCREASES -> ADC voltage DROPS.
+  // Therefore: flexValue < threshold indicates BENT.
+  // (Note: If your circuit is reversed: 3.3V -> 10k -> ADC -> Flex -> GND, then flexValue > threshold indicates BENT)
+  if (flexValue < threshold) {
     digitalWrite(LED_PIN, HIGH);
     Serial.println("  ->  [BENT] LED ON");
   } 
