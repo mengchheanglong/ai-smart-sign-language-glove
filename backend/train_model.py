@@ -246,7 +246,7 @@ def train_gesture_model(
     bundle = {
         "model": clf,
         "feature_names": FEATURE_NAMES,
-        "classes": GESTURE_CLASSES,
+        "classes": list(clf.classes_),
         "metrics": {
             "accuracy": float(acc),
             "macro_f1": float(macro_f1),

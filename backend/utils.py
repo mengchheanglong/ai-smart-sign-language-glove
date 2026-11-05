@@ -236,12 +236,19 @@ def validate_sensor_packet(packet):
 
 
 
-def packet_ready_for_inference(packet):
+def packet_ready_for_inference(packet, allow_experimental_imu=False):
     """Require explicit live-device health; legacy packets remain supported in tests."""
     if packet.get("imu_valid") is False or packet.get("accel") is None or packet.get("gyro") is None:
         return False
-    # At the configured ±2g range, values at the rail are clipped.
-    if any(abs(axis) >= 19.5 for axis in packet["accel"]):
+    # Experimental correction has not been validated for model inference.
+    if packet.get("imu_experimental") is True:
+        if not allow_experimental_imu:
+            return False
+        # Undo the device-specific offset to detect clipping in the raw ±8 g range.
+        offsets = (-0.16923984, -5.58236706, -0.12171183)
+        if any(abs(axis / 9.80665 + offset) >= 7.95 for axis, offset in zip(packet["accel"], offsets)):
+            return False
+    elif any(abs(axis) >= 19.5 for axis in packet["accel"]):
         return False
     if "calibrated" in packet:
         flags = packet["calibrated"]

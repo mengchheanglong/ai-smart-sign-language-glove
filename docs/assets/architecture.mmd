@@ -1,0 +1,17 @@
+%%{init: {"theme": "base", "themeVariables": {"background": "#000000", "primaryColor": "#000000", "primaryTextColor": "#ffffff", "primaryBorderColor": "#ffffff", "secondaryColor": "#000000", "tertiaryColor": "#000000", "lineColor": "#ffffff", "textColor": "#ffffff", "clusterBkg": "#000000", "clusterBorder": "#ffffff", "edgeLabelBackground": "#000000"}, "flowchart": {"curve": "linear"}}}%%
+flowchart LR
+    subgraph Glove[Glove]
+        F[Flex sensors] --> E[ESP32]
+        I[MPU6050 IMU] --> E
+        E --> B[Buzzer]
+    end
+    subgraph Software[Software]
+        P[Python classifier] --> D[Streamlit dashboard]
+    end
+    E -->|USB serial| P
+    D -.-> E
+    style Glove fill:#000000,stroke:#ffffff,color:#ffffff
+    style Software fill:#000000,stroke:#ffffff,color:#ffffff
+    classDef mono fill:#000000,stroke:#ffffff,color:#ffffff
+    class F,I,E,B,P,D mono
+    linkStyle default stroke:#ffffff,color:#ffffff

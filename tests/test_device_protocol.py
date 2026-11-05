@@ -49,3 +49,18 @@ def test_accelerometer_clipping_blocks_inference():
     sample["accel"] = [0.0, -19.613, 9.8]
     assert validate_sensor_packet(sample)[0]
     assert not packet_ready_for_inference(sample)
+
+
+def test_experimental_imu_blocks_inference():
+    sample = packet()
+    sample["imu_experimental"] = True
+    assert validate_sensor_packet(sample)[0]
+    assert not packet_ready_for_inference(sample)
+
+
+def test_experimental_imu_requires_opt_in_and_rejects_raw_clipping():
+    sample = packet()
+    sample["imu_experimental"] = True
+    assert packet_ready_for_inference(sample, allow_experimental_imu=True)
+    sample["accel"] = [0.0, (-8.0 + 5.58236706) * 9.80665, 0.0]
+    assert not packet_ready_for_inference(sample, allow_experimental_imu=True)

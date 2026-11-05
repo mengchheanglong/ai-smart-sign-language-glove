@@ -31,7 +31,7 @@ Desktop.ini
 models/*.joblib
 models/*.pkl
 !models/.gitkeep
-dataset/*.csv
+dataset/**/*.csv
 !dataset/.gitkeep
 
 # Logs

@@ -52,7 +52,9 @@ class GesturePredictor:
         confidence_threshold: float = 0.70,
         smoothing_window: int = 5,
         debounce_count: int = 3,
+        allow_experimental_imu: bool = False,
     ):
+        self.allow_experimental_imu = allow_experimental_imu
         self.model_path = Path(model_path) if model_path else get_model_path()
         self.confidence_threshold = confidence_threshold
         self.smoothing_window = smoothing_window
@@ -147,7 +149,7 @@ class GesturePredictor:
         if enabled is not None and self.active_flex_sensors != sum(enabled):
             self.reset()
             return "UNKNOWN", 0.0, {}
-        if "flex" in packet_or_row and not packet_ready_for_inference(packet_or_row):
+        if "flex" in packet_or_row and not packet_ready_for_inference(packet_or_row, allow_experimental_imu=self.allow_experimental_imu):
             self.reset()
             return "UNKNOWN", 0.0, {}
         candidate, prob, prob_dict = self.predict_raw(packet_or_row)

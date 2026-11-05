@@ -15,7 +15,6 @@ Structure:
 - Five flex channels as a measurement table, not five decorated cards
 - IMU attitude: derived pitch/roll/resultant, then per-axis acceleration and rate
 - Session log: committed gesture tokens with the confidence that committed them
-- Measurement notes: what the console shows, and what it does not
 """
 
 import math
@@ -204,13 +203,6 @@ hr { border-color: var(--line); }
 .log-empty .t { font-size: 13px; font-weight: 600; color: var(--text); }
 .log-empty .d { font-size: 12px; color: var(--text-2); margin-top: 5px; line-height: 1.6; }
 
-/* Claim and limit, equal weight */
-.notes { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-top: 16px; }
-.note { background: var(--bg); padding: 16px 18px; }
-.note.limit { background: var(--surface); }
-.note h4 { margin: 0 0 9px; font-size: 12px; font-weight: 600; color: var(--text-2); }
-.note ul { margin: 0; padding-left: 15px; }
-.note li { font-size: 12px; color: var(--text-2); line-height: 1.65; }
 
 /* Sidebar */
 .side-title { font-family: var(--mono); font-size: 10px; color: var(--text-3); margin: 20px 0 4px; }
@@ -221,7 +213,6 @@ hr { border-color: var(--line); }
   .readout, .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .rcell:nth-child(3), .stat:nth-child(3) { border-left: none; padding-left: 0; }
   .rcell:nth-child(3), .rcell:nth-child(4), .stat:nth-child(3), .stat:nth-child(4) { padding-top: 14px; }
-  .notes { grid-template-columns: 1fr; }
   .meta-row { gap: 18px; }
   .console-title { font-size: 21px; }
 }
@@ -253,7 +244,11 @@ CHART_CONFIG = {"displayModeBar": False}
 # ============================================================
 if "predictor" not in st.session_state:
     try:
-        st.session_state.predictor = GesturePredictor()
+        experimental_model = Path(__file__).resolve().parent.parent / "models" / "experimental_four_gestures_v2.joblib"
+        st.session_state.predictor = (
+            GesturePredictor(model_path=experimental_model, allow_experimental_imu=True)
+            if experimental_model.exists() else GesturePredictor()
+        )
     except Exception as e:
         st.session_state.predictor = None
         st.session_state.predictor_error = str(e)
@@ -481,7 +476,7 @@ if input_source == SOURCE_SERIAL:
         st.sidebar.markdown('<div style="color: #EF4444; font-weight: 600; font-size: 0.85rem; margin-top: 4px;">○ Disconnected (Click Connect)</div>', unsafe_allow_html=True)
 
     st.sidebar.markdown('<div class="side-title">CALIBRATION AND BUZZER</div>', unsafe_allow_html=True)
-    st.sidebar.caption("Hold the four connected fingers straight and start capture. When complete, bend them comfortably and start bent capture. Each takes about 5 seconds.")
+    st.sidebar.caption("Hold the four connected fingers straight and start capture. When complete, bend them comfortably and start bent capture. Each takes about 10 seconds with current firmware.")
     for label, cmd in [("Capture straight", "straight"), ("Capture bent", "bent"), ("Clear calibration", "clear"), ("Test buzzer", "buzzer")]:
         if st.sidebar.button(label, disabled=not is_conn, width="stretch"):
             st.session_state.reader.send_command(cmd)
@@ -530,7 +525,7 @@ smoothing_window = st.sidebar.slider(
     "Majority window",
     1,
     10,
-    5,
+    3,
     1,
     help="Frames in the rolling vote that settles the reported gesture.",
 )
@@ -538,6 +533,7 @@ smoothing_window = st.sidebar.slider(
 if st.session_state.predictor:
     st.session_state.predictor.confidence_threshold = conf_threshold
     st.session_state.predictor.set_smoothing_window(smoothing_window)
+    st.session_state.predictor.debounce_count = min(3, smoothing_window)
 
 st.sidebar.markdown('<div class="side-title">STREAM</div>', unsafe_allow_html=True)
 stream_active = st.sidebar.toggle("Live refresh", value=True, help="Re-runs the console about 12 times a second to follow the glove.")
@@ -652,10 +648,20 @@ if is_placeholder:
     st.stop()
 
 if input_source == SOURCE_SERIAL:
-    if st.session_state.predictor and st.session_state.predictor.active_flex_sensors != sum(current_packet.get("enabled", [True] * 5)):
+    if st.session_state.predictor and getattr(st.session_state.predictor, "active_flex_sensors", None) != sum(current_packet.get("enabled", [True] * 5)):
         st.warning("Model does not match the connected sensor count. Record new samples and retrain before live recognition.")
     st.warning("Model training provenance is not verified by this app. Use a model trained and evaluated on your own real glove recordings for a live demo.")
-    st.caption(f"Calibration capture: {current_packet.get('capture', 'unknown')} · samples: {current_packet.get('capture_count', 0)}/50 · straight captured: {current_packet.get('straight_ready', False)}")
+    total = current_packet.get("capture_total", 50)
+    st.caption(f"Calibration capture: {current_packet.get('capture', 'unknown')} · samples: {current_packet.get('capture_count', 0)}/{total} · straight captured: {current_packet.get('straight_ready', False)}")
+    if "capture_spread" in current_packet:
+        st.caption("Capture spread measures variation during the hold (maximum 120 ADC, or 200 for sensor 4). Sensor 4 may give less reliable readings. Range compares bent with the new straight capture (minimum 50 ADC).")
+        for i, enabled in enumerate(current_packet.get("enabled", [True] * 5)):
+            if enabled:
+                spread = current_packet["capture_spread"][i]
+                span = current_packet["capture_range"][i]
+                result = current_packet["capture_result"][i]
+                status = {0: "in progress" if current_packet.get("capture") != "idle" else "pending", 1: "passed", 2: "failed; previous calibration retained"}.get(result, "unknown")
+                st.caption(f"Sensor {i + 1}: spread {spread} ADC · range {span:.1f} ADC · {status}")
 
 if input_source == SOURCE_SERIAL and "calibrated" not in current_packet:
     st.error("Firmware calibration status missing. Upload the current PlatformIO firmware.")
@@ -670,25 +676,21 @@ info = GESTURE_INFO.get(gesture, {})
 meaning = info.get("meaning", "Unrecognised")
 description = info.get("description", "")
 
-# Commit a token once a gesture holds through 12 frames (~1 s at 12 fps) and its
-# reported confidence clears the gate, so the log never records a sub-gate reading.
+# The predictor already smooths and debounces gestures. Commit immediately
+# when it reports a new gesture above the confidence gate.
 if gesture not in ("UNKNOWN", "RESTING"):
-    if gesture == st.session_state.last_stable_gesture:
-        st.session_state.gesture_hold_count += 1
-        if st.session_state.gesture_hold_count == 12 and confidence >= conf_threshold:
-            token = meaning.split("/")[0].strip().upper()
-            if input_source == SOURCE_SERIAL and st.session_state.reader and st.session_state.reader.is_connected:
-                st.session_state.reader.send_command("buzzer")
-            st.session_state.history_tokens.append(token)
-            st.session_state.event_log.append(
-                {"t": time.strftime("%H:%M:%S"), "gesture": gesture, "confidence": confidence, "token": token}
-            )
-            st.session_state.event_log = st.session_state.event_log[-200:]
-    else:
+    if gesture != st.session_state.last_stable_gesture and confidence >= conf_threshold:
+        token = meaning.split("/")[0].strip().upper()
+        if input_source == SOURCE_SERIAL and st.session_state.reader and st.session_state.reader.is_connected:
+            st.session_state.reader.send_command("buzzer")
+        st.session_state.history_tokens.append(token)
+        st.session_state.event_log.append(
+            {"t": time.strftime("%H:%M:%S"), "gesture": gesture, "confidence": confidence, "token": token}
+        )
+        st.session_state.event_log = st.session_state.event_log[-200:]
         st.session_state.last_stable_gesture = gesture
-        st.session_state.gesture_hold_count = 1
 else:
-    st.session_state.gesture_hold_count = 0
+    st.session_state.last_stable_gesture = None
 
 label = CLASS_LABELS.get(gesture, gesture)
 if gesture == "UNKNOWN":
@@ -868,7 +870,9 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-if any(abs(axis) >= 19.5 for axis in current_packet["accel"]):
+if current_packet.get("imu_experimental"):
+    st.warning("Experimental IMU correction and gesture model are active. Results may be inaccurate, especially for peace and pointing.")
+elif any(abs(axis) >= 19.5 for axis in current_packet["accel"]):
     st.warning("An accelerometer axis is at its measurement limit. Check the sensor and wiring; recognition is paused while readings are clipped.")
 
 ax, ay, az = current_packet["accel"]
@@ -1008,33 +1012,6 @@ with col_clear:
         st.session_state.last_stable_gesture = None
         st.session_state.gesture_hold_count = 0
         st.rerun()
-
-
-# ============================================================
-# MEASUREMENT NOTES
-# ============================================================
-st.markdown(
-    '<div class="sec"><div class="sec-title">Measurement notes</div>'
-    '<div class="sec-meta">read before quoting these numbers</div></div>',
-    unsafe_allow_html=True,
-)
-
-st.markdown(
-    '<div class="notes">'
-    '<div class="note"><h4>What this shows</h4><ul>'
-    "<li>Per-channel flex ADC and the bend fraction implied by this glove's divider calibration.</li>"
-    "<li>Class probabilities from the trained classifier, with the gate drawn on the chart.</li>"
-    "<li>Accelerometer-derived pitch, roll and resultant, and the rate gyroscope triad.</li>"
-    "<li>Which gestures were committed to the translation, with their confidence.</li>"
-    "</ul></div>"
-    '<div class="note limit"><h4>What it does not show</h4><ul>'
-    "<li>Pitch and roll are accelerometer-only approximations; they are not fused with the gyroscope.</li>"
-    "<li>Bend percentages are relative to one calibration and drift with glove fit and sensor wear.</li>"
-    "<li>Probabilities are model outputs, not calibrated confidence; treat the gate as a filter, not a guarantee.</li>"
-    "<li>Only trained custom gestures: no complete sign language translation.</li>"
-    "</ul></div></div>",
-    unsafe_allow_html=True,
-)
 
 
 # ============================================================
