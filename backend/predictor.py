@@ -31,6 +31,7 @@ import joblib
 import numpy as np
 
 from backend.utils import (
+    packet_ready_for_inference,
     get_model_path,
     extract_features,
     FEATURE_NAMES,
@@ -61,6 +62,7 @@ class GesturePredictor:
         self.feature_names = []
         self.classes = []
         self.metrics = {}
+        self.active_flex_sensors = None
 
         # Rolling state
         self._window = deque(maxlen=self.smoothing_window)
@@ -83,6 +85,7 @@ class GesturePredictor:
             self.feature_names = bundle.get("feature_names", FEATURE_NAMES)
             self.classes = list(bundle.get("classes", self.model.classes_))
             self.metrics = bundle.get("metrics", {})
+            self.active_flex_sensors = bundle.get("active_flex_sensors")
         else:
             # Direct estimator
             self.model = bundle
@@ -140,6 +143,13 @@ class GesturePredictor:
         Returns:
             (smoothed_gesture, confidence, probability_dict)
         """
+        enabled = packet_or_row.get("enabled")
+        if enabled is not None and self.active_flex_sensors != sum(enabled):
+            self.reset()
+            return "UNKNOWN", 0.0, {}
+        if "flex" in packet_or_row and not packet_ready_for_inference(packet_or_row):
+            self.reset()
+            return "UNKNOWN", 0.0, {}
         candidate, prob, prob_dict = self.predict_raw(packet_or_row)
 
         # Append candidate to sliding window
@@ -176,7 +186,7 @@ def main():
     parser.add_argument("--model", type=str, default=None, help="Path to trained model artifact")
     parser.add_argument("--mock", action="store_true", help="Run simulated glove stream")
     parser.add_argument("--threshold", type=float, default=0.70, help="Confidence threshold (0.0-1.0)")
-    parser.add_argument("--feedback", action="store_true", help="Send LED feedback to glove on gesture match")
+    parser.add_argument("--feedback", action="store_true", help="Send buzzer feedback on a gesture change")
     parser.add_argument("--max-packets", type=int, default=None, help="Stop after N predictions")
     args = parser.parse_args()
 
@@ -208,6 +218,9 @@ def main():
     try:
         for packet in reader.stream(max_packets=args.max_packets):
             count += 1
+            if not reader.mock and "calibrated" not in packet:
+                print("Firmware calibration status missing; upload current firmware.")
+                continue
             gesture, conf, probs = predictor.predict(packet)
 
             info = GESTURE_INFO.get(gesture, {})
@@ -218,7 +231,7 @@ def main():
 
             # Trigger LED on gesture change
             if args.feedback and gesture != "UNKNOWN" and gesture != "RESTING" and gesture != last_gesture:
-                reader.send_command({"led": 1})
+                reader.send_command("buzzer")
 
             last_gesture = gesture
 

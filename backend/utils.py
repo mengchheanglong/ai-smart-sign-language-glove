@@ -64,13 +64,14 @@ def find_serial_ports(prefer_usb=True):
         }
         available.append(info)
         
+        dev_lower = port.device.lower()
         desc_lower = (port.description or "").lower()
         hwid_lower = (port.hwid or "").lower()
-        # Filter out virtual Bluetooth links
-        if "bluetooth" not in desc_lower and "bthenum" not in hwid_lower:
-            if any(k in desc_lower or k in hwid_lower for k in ["ch34", "cp21", "ftdi", "usb", "uart"]):
+        # Filter out virtual Bluetooth and debug links
+        if "bluetooth" not in desc_lower and "bthenum" not in hwid_lower and "bluetooth" not in dev_lower:
+            if any(k in desc_lower or k in hwid_lower or k in dev_lower for k in ["ch34", "cp21", "ftdi", "usb", "uart"]):
                 usb_ports.append(info)
-            elif "com" in port.device.lower():
+            elif port.device.upper().startswith("COM"):
                 usb_ports.append(info)
 
     if prefer_usb and usb_ports:
@@ -183,6 +184,31 @@ def validate_sensor_packet(packet):
             if val < 0 or val > 4095:
                 return False, f"flex[{i}] = {val} is outside range 0-4095"
         
+        if "calibrated" in packet:
+            flags = packet["calibrated"]
+            if not isinstance(flags, list) or len(flags) != 5 or any(type(v) is not bool for v in flags):
+                return False, "calibrated must contain five booleans"
+            for key in ("straight", "bent", "bend_pct", "bend_state"):
+                if not isinstance(packet.get(key), list) or len(packet[key]) != 5:
+                    return False, f"{key} must contain five values"
+            for i, flag in enumerate(flags):
+                if not _is_valid_number(packet["straight"][i]) or not _is_valid_number(packet["bent"][i]):
+                    return False, "invalid calibration reference"
+                pct = packet["bend_pct"][i]
+                if flag and not _is_valid_number(pct, 0, 100):
+                    return False, "invalid bend percentage"
+                if not flag and pct is not None:
+                    return False, "uncalibrated bend must be null"
+                if packet["bend_state"][i] not in ("UNCALIBRATED", "DISCONNECTED", "STRAIGHT", "HALF-BENT", "BENT"):
+                    return False, "invalid bend state"
+
+        if "enabled" in packet and (not isinstance(packet["enabled"], list) or len(packet["enabled"]) != 5 or any(type(v) is not bool for v in packet["enabled"])):
+            return False, "enabled must contain five booleans"
+
+        # An unavailable IMU is explicitly represented by null arrays.
+        if packet.get("imu_valid") is False and packet["accel"] is None and packet["gyro"] is None:
+            return True, None
+
         # Validate accelerometer
         accel = packet["accel"]
         if not isinstance(accel, list) or len(accel) != 3:
@@ -208,6 +234,21 @@ def validate_sensor_packet(packet):
     except Exception as e:
         return False, f"Validation error: {str(e)}"
 
+
+
+def packet_ready_for_inference(packet):
+    """Require explicit live-device health; legacy packets remain supported in tests."""
+    if packet.get("imu_valid") is False or packet.get("accel") is None or packet.get("gyro") is None:
+        return False
+    # At the configured ±2g range, values at the rail are clipped.
+    if any(abs(axis) >= 19.5 for axis in packet["accel"]):
+        return False
+    if "calibrated" in packet:
+        flags = packet["calibrated"]
+        enabled = packet.get("enabled", [True] * 5)
+        if not isinstance(flags, list) or len(flags) != 5 or not any(enabled) or not all(not active or flag is True for active, flag in zip(enabled, flags)):
+            return False
+    return True
 
 def get_model_path():
     """Get the path to the trained model file."""

@@ -30,7 +30,7 @@
 // 100ms = ~10 Hz (good for monitoring in Serial Monitor)
 //  40ms = ~25 Hz (standard for gesture data collection and real-time inference)
 //  20ms = ~50 Hz (maximum recommended for serial JSON output)
-#define SAMPLING_INTERVAL_MS 40
+#define SAMPLING_INTERVAL_MS 100
 
 // ============================================================
 // FLEX SENSOR PIN ASSIGNMENTS (ADC1 channels only!)
@@ -64,6 +64,8 @@
 
 // Number of flex sensors
 #define NUM_FLEX_SENSORS 5
+// Four physical sensors connected; slot 5 is reserved and marked unavailable.
+#define ACTIVE_FLEX_SENSORS 4
 
 // Pin array for multi-sensor loops: [Thumb, Index, Middle, Ring, Little]
 static const int FLEX_PINS[NUM_FLEX_SENSORS] = {
@@ -95,8 +97,7 @@ static const int FLEX_PINS[NUM_FLEX_SENSORS] = {
 
 // Calibration defaults (raw ADC values for fully straight vs fully bent)
 // [Thumb, Index, Middle, Ring, Little]
-static const int DEFAULT_FLEX_STRAIGHT[NUM_FLEX_SENSORS] = {3200, 3200, 3200, 3200, 3200};
-static const int DEFAULT_FLEX_BENT[NUM_FLEX_SENSORS]     = {1200, 1200, 1200, 1200, 1200};
+// Calibration is recorded by the user and stored in nonvolatile memory.
 
 // Operating modes:
 #define SENSOR_MODE_MULTI_5CH   0   // Default: All 5 flex channels + IMU
@@ -136,8 +137,8 @@ static const int DEFAULT_FLEX_BENT[NUM_FLEX_SENSORS]     = {1200, 1200, 1200, 12
 //   GND (-)  → ESP32 GND
 //   I/O / S  → ESP32 GPIO19 (labeled D19)
 //
-// Disabled by default for safety until passive buzzer hardware is connected and verified:
-// #define BUZZER_ENABLED
+// Enabled for passive buzzer hardware feedback on GPIO19:
+#define BUZZER_ENABLED
 #define BUZZER_PIN           19     // GPIO19 (D19, adjacent to GPIO18 LED pin)
 #define BUZZER_TONE_FREQ     2000   // Audio frequency in Hz (2000 Hz = crisp, pleasant beep)
 #define BUZZER_BEEP_MS       80     // Beep duration for gesture recognition (ms)

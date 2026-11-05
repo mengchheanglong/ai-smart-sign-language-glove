@@ -19,6 +19,7 @@ Structure:
 """
 
 import math
+import os
 import random
 import sys
 import time
@@ -233,6 +234,8 @@ st.markdown(CSS_TEMPLATE.substitute(T), unsafe_allow_html=True)
 SOURCE_SIM = "Simulated feed"
 SOURCE_SERIAL = "ESP32 serial"
 PIN_LABELS = ["GPIO32", "GPIO33", "GPIO34", "GPIO35", "GPIO36 (VP)"]
+# Pin-based names remain accurate until the actual finger mapping is confirmed.
+FLEX_SENSOR_NAMES = ["Sensor D32", "Sensor D33", "Sensor D34", "Sensor D35", "Not connected"]
 CLASS_LABELS = {
     "OPEN_PALM": "Open palm",
     "CLOSED_FIST": "Closed fist",
@@ -277,8 +280,6 @@ if "cal_thumb_straight" not in st.session_state:
     st.session_state.cal_thumb_straight = 3200
 if "cal_thumb_bent" not in st.session_state:
     st.session_state.cal_thumb_bent = 1100
-if "single_sensor_bench" not in st.session_state:
-    st.session_state.single_sensor_bench = True
 
 
 # ============================================================
@@ -411,7 +412,7 @@ input_source = st.sidebar.radio(
     [SOURCE_SIM, SOURCE_SERIAL],
     index=1 if has_real_hardware else 0,
     label_visibility="collapsed",
-    help="Simulated feed replays recorded pose profiles. ESP32 serial reads the glove over USB.",
+    help="Simulated feed generates pose profiles. ESP32 serial reads the glove over USB.",
 )
 
 if input_source == SOURCE_SERIAL:
@@ -420,10 +421,16 @@ if input_source == SOURCE_SERIAL:
     with col_port:
         port_names = [p["port"] for p in available_ports]
         if port_names:
-            default_port_idx = port_names.index("COM7") if "COM7" in port_names else 0
+            env_port = os.getenv("SERIAL_PORT", "COM7")
+            if env_port in port_names:
+                default_port_idx = port_names.index(env_port)
+            elif "COM7" in port_names:
+                default_port_idx = port_names.index("COM7")
+            else:
+                default_port_idx = 0
             selected_port = st.selectbox("Port", port_names, index=default_port_idx, label_visibility="collapsed")
         else:
-            selected_port = st.text_input("Port", value="COM7", label_visibility="collapsed")
+            selected_port = st.text_input("Port", value=os.getenv("SERIAL_PORT", "COM7"), label_visibility="collapsed")
     with col_refresh:
         if st.button("Scan", help="Rescan USB serial ports"):
             st.rerun()
@@ -473,29 +480,11 @@ if input_source == SOURCE_SERIAL:
     else:
         st.sidebar.markdown('<div style="color: #EF4444; font-weight: 600; font-size: 0.85rem; margin-top: 4px;">○ Disconnected (Click Connect)</div>', unsafe_allow_html=True)
 
-    st.sidebar.markdown('<div class="side-title">BENCH TESTING</div>', unsafe_allow_html=True)
-    st.session_state.single_sensor_bench = st.sidebar.toggle(
-        "Single-sensor test mode",
-        value=st.session_state.single_sensor_bench,
-        help="When testing with only 1 breadboard flex sensor (GPIO32), holds disconnected pins at straight so the ML classifier is not biased.",
-    )
-
-    st.sidebar.markdown('<div class="side-title">DEVICE FEEDBACK</div>', unsafe_allow_html=True)
-    col_led, col_buzz = st.sidebar.columns(2)
-    with col_led:
-        if st.button("Blink LED", width="stretch", help="Pulse the status LED on GPIO18"):
-            if st.session_state.reader and st.session_state.reader.is_connected:
-                st.session_state.reader.send_command("b\n")
-                st.toast("LED pulse sent", icon="💡")
-            else:
-                st.toast("Connect the ESP32 first", icon="⚠️")
-    with col_buzz:
-        if st.button("Buzzer", width="stretch", help="Sound a 2400 Hz tone on GPIO19"):
-            if st.session_state.reader and st.session_state.reader.is_connected:
-                st.session_state.reader.send_command("z\n")
-                st.toast("Buzzer tone sent", icon="🔊")
-            else:
-                st.toast("Connect the ESP32 first", icon="⚠️")
+    st.sidebar.markdown('<div class="side-title">CALIBRATION AND BUZZER</div>', unsafe_allow_html=True)
+    st.sidebar.caption("Hold the four connected fingers straight and start capture. When complete, bend them comfortably and start bent capture. Each takes about 5 seconds.")
+    for label, cmd in [("Capture straight", "straight"), ("Capture bent", "bent"), ("Clear calibration", "clear"), ("Test buzzer", "buzzer")]:
+        if st.sidebar.button(label, disabled=not is_conn, width="stretch"):
+            st.session_state.reader.send_command(cmd)
 
 else:
     st.sidebar.markdown('<div class="side-title">SIMULATION</div>', unsafe_allow_html=True)
@@ -589,7 +578,7 @@ else:
         if is_valid and packet:
             st.session_state.last_packet = packet
             current_packet = packet
-        elif "last_packet" in st.session_state:
+        elif "last_packet" in st.session_state and reader.last_packet_time is not None and time.time() - reader.last_packet_time < 1.0:
             current_packet = st.session_state.last_packet
         else:
             current_packet = generate_simulated_packet("RESTING", noise=False)
@@ -650,21 +639,33 @@ if not st.session_state.predictor:
     reason = st.session_state.get("predictor_error", "The model artifact could not be loaded.")
     st.error(f"No trained model available, so nothing can be classified yet. {reason}")
     st.caption("Run `python backend/train_model.py` to train and save `models/gesture_model.joblib`, then reload this page.")
-    st.stop()
 
 
 # ============================================================
 # INFERENCE
 # ============================================================
-inference_packet = dict(current_packet)
-if st.session_state.get("single_sensor_bench", False):
-    inf_flex = list(current_packet["flex"])
-    # In single-sensor bench mode, hold all other 4 channels at neutral straight (3200)
-    for k in range(1, 5):
-        inf_flex[k] = 3200
-    inference_packet["flex"] = inf_flex
+if is_placeholder:
+    st.info("Connect the ESP32 to see measurements, or select the simulated feed.")
+    if stream_active and input_source == SOURCE_SERIAL and reader_obj and reader_obj.is_connected:
+        time.sleep(0.1)
+        st.rerun()
+    st.stop()
 
-gesture, confidence, prob_dict = st.session_state.predictor.predict(inference_packet)
+if input_source == SOURCE_SERIAL:
+    if st.session_state.predictor and st.session_state.predictor.active_flex_sensors != sum(current_packet.get("enabled", [True] * 5)):
+        st.warning("Model does not match the connected sensor count. Record new samples and retrain before live recognition.")
+    st.warning("Model training provenance is not verified by this app. Use a model trained and evaluated on your own real glove recordings for a live demo.")
+    st.caption(f"Calibration capture: {current_packet.get('capture', 'unknown')} · samples: {current_packet.get('capture_count', 0)}/50 · straight captured: {current_packet.get('straight_ready', False)}")
+
+if input_source == SOURCE_SERIAL and "calibrated" not in current_packet:
+    st.error("Firmware calibration status missing. Upload the current PlatformIO firmware.")
+    st.stop()
+
+if st.session_state.predictor:
+    gesture, confidence, prob_dict = st.session_state.predictor.predict(current_packet)
+else:
+    gesture, confidence, prob_dict = "UNKNOWN", 0.0, {}
+
 info = GESTURE_INFO.get(gesture, {})
 meaning = info.get("meaning", "Unrecognised")
 description = info.get("description", "")
@@ -676,6 +677,8 @@ if gesture not in ("UNKNOWN", "RESTING"):
         st.session_state.gesture_hold_count += 1
         if st.session_state.gesture_hold_count == 12 and confidence >= conf_threshold:
             token = meaning.split("/")[0].strip().upper()
+            if input_source == SOURCE_SERIAL and st.session_state.reader and st.session_state.reader.is_connected:
+                st.session_state.reader.send_command("buzzer")
             st.session_state.history_tokens.append(token)
             st.session_state.event_log.append(
                 {"t": time.strftime("%H:%M:%S"), "gesture": gesture, "confidence": confidence, "token": token}
@@ -689,7 +692,7 @@ else:
 
 label = CLASS_LABELS.get(gesture, gesture)
 if gesture == "UNKNOWN":
-    state_chip = chip("Below confidence gate", "warn", "dot dot-half")
+    state_chip = chip("Unclassified or sensor/model unavailable", "warn", "dot dot-half")
 elif gesture == "RESTING":
     state_chip = chip("Idle · resting hand", "", "dot dot-open")
 elif confidence < conf_threshold:
@@ -727,7 +730,7 @@ with col_recog:
         + readout_cell("Confidence", f"{confidence * 100:.1f}", "%")
         + readout_cell("Margin to gate", f"{margin:+.1f}", "pp")
         + readout_cell("Held for", f"{held}", "frames")
-        + readout_cell("Best class", f"{max(prob_dict.values()) * 100:.1f}", "%")
+        + readout_cell("Best class", f"{max(prob_dict.values(), default=0.0) * 100:.1f}", "%")
         + "</div>"
         f'<div class="readout-note">{description}</div>',
         unsafe_allow_html=True,
@@ -790,18 +793,15 @@ st.markdown(
 )
 
 flex_rows: List[str] = []
-is_bench = st.session_state.get("single_sensor_bench", False)
 for i, raw_val in enumerate(current_packet["flex"]):
-    if i == 0:
-        bend = raw_to_bend_pct(raw_val, st.session_state.cal_thumb_straight, st.session_state.cal_thumb_bent)
-        state_label, dot_class = bend_state(bend)
-    elif is_bench:
-        bend = None
-        state_label = "Unconnected (Bench Mode)"
-        dot_class = "dot dot-open"
-    else:
+    if input_source == SOURCE_SIM:
         bend = raw_to_bend_pct(raw_val)
         state_label, dot_class = bend_state(bend)
+    else:
+        values = current_packet.get("bend_pct", [None] * 5)
+        bend = values[i] if len(values) == 5 else None
+        state_label = current_packet.get("bend_state", ["UNCALIBRATED"] * 5)[i]
+        dot_class = "dot" if bend is not None else "dot dot-open"
 
     if bend is not None:
         bend_cell = (
@@ -813,25 +813,21 @@ for i, raw_val in enumerate(current_packet["flex"]):
         bend_cell = '<div class="bendcell"><span class="meter"><i style="width:0%"></i></span><span class="num" style="color:var(--text-muted)">—</span></div>'
         state_cell = f'<span class="state" style="color:var(--text-muted)"><span class="dot dot-open"></span>{state_label}</span>'
 
-    # If pin is floating in bench mode, add subtle hint
-    adc_note = " <span style=\"font-size:0.75rem; color:var(--text-muted);\">(floating)</span>" if (is_bench and i > 0 and raw_val > 0) else ""
-
+    enabled_channel = input_source == SOURCE_SIM or current_packet.get("enabled", [True] * 5)[i]
+    raw_display = str(raw_val) if enabled_channel else "—"
+    voltage_display = f"{adc_to_voltage(raw_val):.2f}" if enabled_channel else "—"
     flex_rows.append(
         "<tr>"
         f'<td class="name">{FLEX_SENSOR_NAMES[i]}</td>'
         f'<td class="num">{PIN_LABELS[i]}</td>'
-        f'<td class="num r">{raw_val}{adc_note}</td>'
-        f'<td class="num r">{adc_to_voltage(raw_val):.2f}</td>'
+        f'<td class="num r">{raw_display}</td>'
+        f'<td class="num r">{voltage_display}</td>'
         f'<td>{bend_cell}</td>'
         f'<td>{state_cell}</td>'
         "</tr>"
     )
 
-note_text = (
-    "Single-Sensor Bench Mode active: Channels 1–4 are disconnected and held at neutral straight. Floating ADC noise is ignored."
-    if is_bench else
-    "Bend is normalised against calibration. Unconnected pins (ADC &lt; 80) are detected and omitted from bend calculations."
-)
+note_text = "ADC values are live readings, not proof of sensor wiring. Bend values require calibration."
 
 st.markdown(
     '<table class="tbl">'
@@ -845,26 +841,23 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-with st.expander("⚙️ Thumb (GPIO32) Calibration & Bench Controls", expanded=False):
-    st.caption(f"Current live Thumb reading: **{current_packet['flex'][0]} ADC** ({adc_to_voltage(current_packet['flex'][0]):.2f} V) · Straight: **{st.session_state.cal_thumb_straight}** · Bent: **{st.session_state.cal_thumb_bent}**")
-    c_flat, c_bent, c_rst = st.columns(3)
-    with c_flat:
-        if st.button("📍 Set Flat (0% Bend)", use_container_width=True, help="Set current reading as flat/straight position"):
-            st.session_state.cal_thumb_straight = current_packet["flex"][0]
-            st.toast(f"Calibrated Flat to {current_packet['flex'][0]} ADC", icon="📏")
-            st.rerun()
-    with c_bent:
-        if st.button("✊ Set Bent (100% Bend)", use_container_width=True, help="Set current reading as fully bent position"):
-            st.session_state.cal_thumb_bent = current_packet["flex"][0]
-            st.toast(f"Calibrated Bent to {current_packet['flex'][0]} ADC", icon="📐")
-            st.rerun()
-    with c_rst:
-        if st.button("Reset Defaults", use_container_width=True, help="Restore factory calibration limits (3200 / 1100)"):
-            st.session_state.cal_thumb_straight = 3200
-            st.session_state.cal_thumb_bent = 1100
-            st.toast("Restored calibration defaults", icon="🔄")
-            st.rerun()
+if input_source == SOURCE_SERIAL:
+    st.caption(f"Device sample time: {current_packet['timestamp_ms']} ms · valid frames received: {reader_obj.valid_packets if reader_obj else 0}. These numbers should advance while live refresh is on.")
+    with st.expander("Calibration measurements"):
+        for i, name in enumerate(FLEX_SENSOR_NAMES):
+            flat = current_packet.get("straight", [0] * 5)[i]
+            bent_value = current_packet.get("bent", [0] * 5)[i]
+            valid = current_packet.get("calibrated", [False] * 5)[i]
+            enabled = current_packet.get("enabled", [True] * 5)[i]
+            status = "not connected" if not enabled else "valid" if valid else "uncalibrated / retry"
+            st.write(f"{name}: straight {flat:.1f}, bent {bent_value:.1f}, range {abs(bent_value-flat):.1f} ADC — {status}")
 
+if current_packet.get("imu_valid") is False or current_packet.get("accel") is None:
+    st.warning("MPU6050 unavailable. Flex readings can still update; gesture recognition is paused.")
+    if stream_active:
+        time.sleep(0.1)
+        st.rerun()
+    st.stop()
 
 # ============================================================
 # ORIENTATION AND MOTION
@@ -874,6 +867,9 @@ st.markdown(
     '<div class="sec-meta">MPU6050 · accelerometer and rate gyroscope</div></div>',
     unsafe_allow_html=True,
 )
+
+if any(abs(axis) >= 19.5 for axis in current_packet["accel"]):
+    st.warning("An accelerometer axis is at its measurement limit. Check the sensor and wiring; recognition is paused while readings are clipped.")
 
 ax, ay, az = current_packet["accel"]
 gx, gy, gz = current_packet["gyro"]
@@ -1035,7 +1031,7 @@ st.markdown(
     "<li>Pitch and roll are accelerometer-only approximations; they are not fused with the gyroscope.</li>"
     "<li>Bend percentages are relative to one calibration and drift with glove fit and sensor wear.</li>"
     "<li>Probabilities are model outputs, not calibrated confidence; treat the gate as a filter, not a guarantee.</li>"
-    "<li>Six static gestures only: no fingerspelling, motion signs or grammar.</li>"
+    "<li>Only trained custom gestures: no complete sign language translation.</li>"
     "</ul></div></div>",
     unsafe_allow_html=True,
 )
@@ -1061,12 +1057,11 @@ with st.expander("Diagnostics and raw packet"):
                 f"Valid frames `{reader_obj.valid_packets}`  \n"
                 f"Device rate `{reader_obj.get_packet_rate():.1f} Hz`"
             )
-        st.markdown(
-            f"**Model**  \n"
-            f"Artifact `{Path(st.session_state.predictor.model_path).name}`  \n"
-            f"Classes `{', '.join(st.session_state.predictor.classes)}`  \n"
-            f"Gate `{conf_threshold * 100:.0f}%` · window `{smoothing_window}` frames"
-        )
+        if st.session_state.predictor:
+            st.markdown(f"**Model**  \nArtifact `{Path(st.session_state.predictor.model_path).name}`  \nClasses `{', '.join(st.session_state.predictor.classes)}`")
+        else:
+            st.write("Model unavailable")
+
     with diag_right:
         st.caption("Raw JSON packet as received")
         st.json(current_packet)

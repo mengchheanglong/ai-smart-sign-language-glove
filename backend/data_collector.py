@@ -104,13 +104,17 @@ class DataCollector:
             self.reader.set_mock_mode(gesture)
 
         # Visual feedback: flash glove LED if connected
-        self.reader.send_command({"led": 1})
+        self.reader.send_command("buzzer")
 
         rows: List[Dict[str, Any]] = []
         collected = 0
 
         try:
             for packet in self.reader.stream():
+                from backend.utils import packet_ready_for_inference
+                if (not self.reader.mock and "calibrated" not in packet) or not packet_ready_for_inference(packet):
+                    print("\nSensor data unavailable or not calibrated; recording stopped.")
+                    return None
                 row = packet_to_csv_row(packet, gesture=gesture, participant_id=participant_id, session_id=session_id)
                 rows.append(row)
                 collected += 1
@@ -131,7 +135,7 @@ class DataCollector:
             return None
 
         # Turn off LED / flash to signal completion
-        self.reader.send_command({"led": 0})
+        self.reader.send_command("buzzer")
 
         if len(rows) == 0:
             print("❌ No samples were collected! Serial connection may not be streaming.")

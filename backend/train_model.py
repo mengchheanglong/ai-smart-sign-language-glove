@@ -179,6 +179,9 @@ def train_gesture_model(
     for g, count in df["gesture"].value_counts().items():
         print(f"  {g:<14}: {count} samples")
 
+    if df["gesture"].nunique() < 2:
+        raise ValueError("At least two gesture classes are required to train a classifier.")
+
     # 2. Split dataset by session, participant, or random stratified sample
     if split_by == "random":
         from sklearn.model_selection import train_test_split
@@ -253,6 +256,7 @@ def train_gesture_model(
         },
         "trained_at": datetime.now().isoformat(),
         "model_type": "RandomForestClassifier",
+        "active_flex_sensors": 4 if (df["flex_little"] == 0).all() else 5,
     }
 
     joblib.dump(bundle, output_model_path)
