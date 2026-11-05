@@ -1,4 +1,4 @@
-# AGENTS.md — AI Smart Sign Language Glove
+# AGENTS.md — ESP32 Gesture Recognition Glove
 
 ## Project Overview
 Wearable glove with flex sensors + MPU6050 → ESP32 → Python ML backend → Streamlit dashboard.

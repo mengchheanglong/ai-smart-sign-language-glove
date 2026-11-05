@@ -1,5 +1,5 @@
 """
-app.py — Telemetry console for the AI Smart Sign Language Glove
+app.py — Telemetry console for the ESP32 Gesture Recognition Glove
 Team 2 — Senior Design Project
 
 Design intent: this is a measurement instrument, not a marketing page. The
@@ -48,7 +48,7 @@ from backend.serial_reader import SerialReader, get_shared_reader, close_shared_
 # PAGE CONFIGURATION
 # ============================================================
 st.set_page_config(
-    page_title="Telemetry console · Sign Language Glove",
+    page_title="Telemetry console · ESP32 Gesture Recognition Glove",
     page_icon="🧤",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -607,7 +607,7 @@ st.markdown(
     '<div class="console-head">'
     '<div>'
     '<div class="eyebrow">Senior design project · Team 2 · measurements are not clinical</div>'
-    '<div class="console-title">AI Smart Sign Language Glove</div>'
+    '<div class="console-title">ESP32 Gesture Recognition Glove</div>'
     '<div class="console-sub">Telemetry console for glove-mounted flex and inertial sensors</div>'
     "</div>"
     '<div class="head-meta">'

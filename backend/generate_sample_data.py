@@ -1,7 +1,7 @@
 """
 generate_sample_data.py — Synthetic Dataset Generator
 
-Generates realistic gesture dataset CSV files for the AI Smart Sign Language Glove.
+Generates realistic gesture dataset CSV files for the ESP32 Gesture Recognition Glove.
 Simulates multiple participants, sessions, and physical sensor responses.
 Allows immediate training and testing of the ML pipeline without physical hardware.
 

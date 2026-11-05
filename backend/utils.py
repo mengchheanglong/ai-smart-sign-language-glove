@@ -1,5 +1,5 @@
 """
-utils.py — Shared Utilities for AI Smart Sign Language Glove
+utils.py — Shared Utilities for ESP32 Gesture Recognition Glove
 
 This module contains helper functions used across the backend:
 - Configuration loading

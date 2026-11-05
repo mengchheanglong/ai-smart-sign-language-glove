@@ -1,10 +1,10 @@
-# AI Smart Sign Language Glove
+# ESP32 Gesture Recognition Glove
 
 **A wearable gesture-recognition prototype built with ESP32, flex sensors, and machine learning.**
 
 The glove measures finger bending and hand motion, streams measurements over USB, and identifies trained hand postures in a Streamlit dashboard. A passive buzzer provides feedback when a new gesture is recognized.
 
-![AI Smart Sign Language Glove prototype with flex sensors, ESP32, wiring, and IMU](docs/assets/glove-prototype-refined.jpg)
+![ESP32 Gesture Recognition Glove prototype with flex sensors, ESP32, wiring, and IMU](docs/assets/glove-prototype-refined.jpg)
 
 *Team 2 · Senior Design Project · Physical prototype. Photo cropped and adjusted for clarity.*
 

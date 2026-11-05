@@ -1,7 +1,7 @@
 /*
  * test_flex_led.cpp — Standalone Flex Sensor & LED Benchmark Test
  * 
- * AI Smart Sign Language Glove — Team 2
+ * ESP32 Gesture Recognition Glove — Team 2
  */
 
 #include <Arduino.h>

@@ -165,7 +165,7 @@ def train_gesture_model(
         output_model_path = Path(output_model_path)
 
     print("==================================================")
-    print("  AI Smart Sign Language Glove — ML Training")
+    print("  ESP32 Gesture Recognition Glove — ML Training")
     print("  Team 2 — Senior Design Project")
     print("==================================================")
     print(f"Dataset path:    {dataset_dir}")
@@ -268,7 +268,7 @@ def train_gesture_model(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Sign Language Glove ML Model Trainer")
+    parser = argparse.ArgumentParser(description="ESP32 Gesture Recognition Glove ML Model Trainer")
     parser.add_argument("--dataset-dir", type=str, default=str(DATASET_DIR), help="Path to CSV dataset folder")
     parser.add_argument("--output-model", type=str, default=str(MODELS_DIR / "gesture_model.joblib"), help="Path to save model")
     parser.add_argument("--split-by", type=str, choices=["session", "participant", "random"], default="session", help="Split strategy")

@@ -1,5 +1,5 @@
 /*
- * config.h — Hardware Configuration for AI Smart Sign Language Glove
+ * config.h — Hardware Configuration for ESP32 Gesture Recognition Glove
  * 
  * PURPOSE:
  *   All pin assignments and hardware settings live here.

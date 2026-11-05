@@ -193,7 +193,7 @@ def main():
     args = parser.parse_args()
 
     print("==================================================")
-    print("  AI Smart Sign Language Glove — Live Predictor")
+    print("  ESP32 Gesture Recognition Glove — Live Predictor")
     print("  Team 2 — Senior Design Project")
     print("==================================================")
 

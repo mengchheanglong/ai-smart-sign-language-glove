@@ -1,7 +1,7 @@
 /*
  * test_flex_led.ino — Standalone Flex Sensor & LED Benchmark Test
  * 
- * AI Smart Sign Language Glove — Team 2
+ * ESP32 Gesture Recognition Glove — Team 2
  * 
  * Hardware Setup:
  *   - Flex Sensor: Connected to GPIO34 (or GPIO32) with 10k divider

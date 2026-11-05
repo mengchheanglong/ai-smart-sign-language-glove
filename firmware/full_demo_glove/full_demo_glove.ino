@@ -1,5 +1,5 @@
 /*
- * full_demo_glove.ino — Complete 5-Finger AI Smart Sign Language Glove
+ * full_demo_glove.ino — Complete 5-Finger ESP32 Gesture Recognition Glove
  * 
  * HARDWARE MAPPING:
  *   - Thumb  Flex:  GPIO 32 (D32)
@@ -378,7 +378,7 @@ void setup() {
 
   Serial.println();
   Serial.println("========================================================");
-  Serial.println("  🧤 AI SMART SIGN LANGUAGE GLOVE — COMPLETE FIRMWARE");
+  Serial.println("  🧤 ESP32 GESTURE RECOGNITION GLOVE — COMPLETE FIRMWARE");
   Serial.println("  5 Flex Channels + GY-87 (MPU6050) + Buzzer + LED");
   Serial.println("========================================================");
   Serial.printf("Flex Pins:   D32 (Thumb), D33 (Index), D34 (Mid), D35 (Ring), D36 (Pinky)\n");

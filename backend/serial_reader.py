@@ -1,5 +1,5 @@
 """
-serial_reader.py — Serial Interface for AI Smart Sign Language Glove
+serial_reader.py — Serial Interface for ESP32 Gesture Recognition Glove
 
 Reads JSON packets from ESP32 over USB Serial, validates data,
 supports CSV logging, and allows bidirectional LED feedback commands.
@@ -41,7 +41,7 @@ from backend.utils import (
 
 
 class MockSerialConnection:
-    """Simulates an ESP32 sending realistic sign language glove data."""
+    """Simulates an ESP32 sending realistic gesture recognition glove data."""
 
     def __init__(self, sample_rate_hz: float = 25.0):
         self.interval = 1.0 / sample_rate_hz
@@ -385,7 +385,7 @@ def close_shared_reader():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="AI Smart Sign Language Glove — Serial Reader CLI")
+    parser = argparse.ArgumentParser(description="ESP32 Gesture Recognition Glove — Serial Reader CLI")
     parser.add_argument("--port", type=str, default=None, help="Serial port (e.g. COM3 or /dev/ttyUSB0)")
     parser.add_argument("--baud", type=int, default=DEFAULT_BAUD_RATE, help="Baud rate (default: 115200)")
     parser.add_argument("--csv", type=str, default=None, help="Optional CSV file to log readings to")
@@ -395,7 +395,7 @@ def main():
     args = parser.parse_args()
 
     print("==================================================")
-    print("  AI Smart Sign Language Glove — Serial Reader")
+    print("  ESP32 Gesture Recognition Glove — Serial Reader")
     print("  Team 2 — Senior Design Project")
     print("==================================================")
 

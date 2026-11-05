@@ -1,5 +1,5 @@
 """
-live_monitor.py — Real-Time Terminal Visualizer for AI Smart Sign Language Glove
+live_monitor.py — Real-Time Terminal Visualizer for ESP32 Gesture Recognition Glove
 Team 2 — Senior Design Project
 
 Displays live ASCII bend gauges, IMU 3D attitude, voltages, and gesture states in terminal.
@@ -71,7 +71,7 @@ def main():
 
     print("\033[2J\033[H", end="") # Clear screen
     print("=" * 75)
-    print("  🧤 AI Smart Sign Language Glove — Live Sensor & IMU Monitor")
+    print("  🧤 ESP32 Gesture Recognition Glove — Live Sensor & IMU Monitor")
     print(f"  Port: {port}  |  Baud: {baud}  |  Running continuously (Ctrl+C to stop)")
     print("=" * 75)
 

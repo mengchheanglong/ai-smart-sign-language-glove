@@ -153,7 +153,7 @@ class DataCollector:
 def interactive_collector(reader: SerialReader, output_dir: Path):
     """Interactive CLI menu for recording multiple gestures in sequence."""
     print("==================================================")
-    print("  AI Smart Sign Language Glove — Dataset Collector")
+    print("  ESP32 Gesture Recognition Glove — Dataset Collector")
     print("  Team 2 — Senior Design Project")
     print("==================================================")
 
@@ -209,7 +209,7 @@ def interactive_collector(reader: SerialReader, output_dir: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Sign Language Glove Gesture Data Collector")
+    parser = argparse.ArgumentParser(description="ESP32 Gesture Recognition Glove Gesture Data Collector")
     parser.add_argument("--port", type=str, default=None, help="Serial port (e.g. COM3)")
     parser.add_argument("--baud", type=int, default=115200, help="Baud rate (default: 115200)")
     parser.add_argument("--gesture", type=str, choices=GESTURE_CLASSES, default=None, help="Directly record one gesture")

@@ -1,5 +1,5 @@
 /*
- * AI Smart Sign Language Glove
+ * ESP32 Gesture Recognition Glove
  * Lesson 1: ESP32 Flex Sensor Diagnostic Benchmark
  *
  * Checks GPIO32 (with mV conversion) AND monitors all ADC1 channels
