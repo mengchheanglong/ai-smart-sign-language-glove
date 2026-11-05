@@ -6,7 +6,7 @@ The glove measures finger bending and hand motion, streams measurements over USB
 
 ![AI Smart Sign Language Glove prototype with flex sensors, ESP32, wiring, and IMU](docs/assets/glove-prototype-refined.jpg)
 
-*Team 2 · Senior Design Project · Physical prototype. Photo cropped and adjusted for clarity; [original photograph](docs/assets/glove-prototype.jpg).*
+*Team 2 · Senior Design Project · Physical prototype. Photo cropped and adjusted for clarity.*
 
 ## At a glance
 
